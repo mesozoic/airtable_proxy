@@ -1,0 +1,122 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - ''
+    method: GET
+    uri: https://api.airtable.com/v0/meta/bases/appG3A7GCIJjrjf8j/tables?include=visibleFieldIds
+  response:
+    body:
+      string: '{"tables":[{"id":"tblH5kStARFR6wTwX","name":"Table 1","primaryFieldId":"fldRLjMJMBjUbn6XF","fields":[{"type":"singleLineText","id":"fldRLjMJMBjUbn6XF","name":"Name"},{"type":"multilineText","id":"fldKkisWnZGrxzMsx","name":"Notes"},{"type":"singleSelect","options":{"choices":[{"id":"sel0HzeQgEq1qPOET","name":"Todo","color":"redLight2"},{"id":"sela9yIL63Z5Dax06","name":"In
+        progress","color":"yellowLight2"},{"id":"selvsCqBEN4FFix0g","name":"Done","color":"greenLight2"}]},"id":"fldYTRx2Dmsim5LfH","name":"Status"}],"views":[{"id":"viwRuTtmaXSV2Xesj","name":"Grid
+        view","type":"grid","visibleFieldIds":["fldRLjMJMBjUbn6XF","fldKkisWnZGrxzMsx","fldYTRx2Dmsim5LfH"]}]}]}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '365'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Thu, 10 Aug 2023 05:34:05 GMT
+      Server:
+      - Tengine
+      Set-Cookie:
+      - AWSALB=giMwk+x/B8fXyRk8g2LcsDrer/dPY8P7/7jCRYhzEb4XVgGh5JbGOTbMXEbT1Utpxl2/OCZ4d3eIWFVJBNUsC8z5Un9cIQNURsiFuKsuYbKBl1t6HaZ6+WGt4h1J;
+        Expires=Thu, 17 Aug 2023 05:34:05 GMT; Path=/
+      - AWSALBCORS=giMwk+x/B8fXyRk8g2LcsDrer/dPY8P7/7jCRYhzEb4XVgGh5JbGOTbMXEbT1Utpxl2/OCZ4d3eIWFVJBNUsC8z5Un9cIQNURsiFuKsuYbKBl1t6HaZ6+WGt4h1J;
+        Expires=Thu, 17 Aug 2023 05:34:05 GMT; Path=/; SameSite=None; Secure
+      - brw=brw8pPs9bqp0et0WJ; path=/; expires=Sat, 10 Aug 2024 05:34:05 GMT; domain=.airtable.com;
+        samesite=none; secure
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - DENY
+      access-control-allow-headers:
+      - authorization,content-length,content-type,user-agent,x-airtable-application-id,x-airtable-user-agent,x-api-version,x-requested-with
+      access-control-allow-methods:
+      - DELETE,GET,OPTIONS,PATCH,POST,PUT
+      access-control-allow-origin:
+      - '*'
+      airtable-uncompressed-content-length:
+      - '668'
+      content-encoding:
+      - gzip
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Cookie:
+      - AWSALB=giMwk+x/B8fXyRk8g2LcsDrer/dPY8P7/7jCRYhzEb4XVgGh5JbGOTbMXEbT1Utpxl2/OCZ4d3eIWFVJBNUsC8z5Un9cIQNURsiFuKsuYbKBl1t6HaZ6+WGt4h1J;
+        AWSALBCORS=giMwk+x/B8fXyRk8g2LcsDrer/dPY8P7/7jCRYhzEb4XVgGh5JbGOTbMXEbT1Utpxl2/OCZ4d3eIWFVJBNUsC8z5Un9cIQNURsiFuKsuYbKBl1t6HaZ6+WGt4h1J;
+        brw=brw8pPs9bqp0et0WJ
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - ''
+    method: GET
+    uri: https://api.airtable.com/v0/appG3A7GCIJjrjf8j/tblH5kStARFR6wTwX?returnFieldsByFieldId=1
+  response:
+    body:
+      string: '{"records":[{"id":"rec2gjdwMTRE5EewZ","createdTime":"2023-08-07T17:19:36.000Z","fields":{"fldRLjMJMBjUbn6XF":"Alpha"}},{"id":"recFpahsiS8mKSrud","createdTime":"2023-08-07T17:19:36.000Z","fields":{"fldRLjMJMBjUbn6XF":"Bravo"}},{"id":"recSVUi0bwKQ5R0pw","createdTime":"2023-08-07T17:19:36.000Z","fields":{"fldRLjMJMBjUbn6XF":"Charlie"}}]}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '181'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Thu, 10 Aug 2023 05:34:06 GMT
+      Server:
+      - Tengine
+      Set-Cookie:
+      - AWSALB=ZNaRjhy6lMIj82vgv9mXwbLnJMCcWGPbVVHhxQQSG+RhnYS5LwcaSFAwHcyp6lOSgKkbIaFLNaKL2AI4VcX83uYNYqPywccEkWvTzdOc92LKB9v0g5BITIb+EOAd;
+        Expires=Thu, 17 Aug 2023 05:34:06 GMT; Path=/
+      - AWSALBCORS=ZNaRjhy6lMIj82vgv9mXwbLnJMCcWGPbVVHhxQQSG+RhnYS5LwcaSFAwHcyp6lOSgKkbIaFLNaKL2AI4VcX83uYNYqPywccEkWvTzdOc92LKB9v0g5BITIb+EOAd;
+        Expires=Thu, 17 Aug 2023 05:34:06 GMT; Path=/; SameSite=None; Secure
+      - brw=brw8pPs9bqp0et0WJ; path=/; expires=Sat, 10 Aug 2024 05:34:06 GMT; domain=.airtable.com;
+        samesite=none; secure
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - DENY
+      access-control-allow-headers:
+      - authorization,content-length,content-type,user-agent,x-airtable-application-id,x-airtable-user-agent,x-api-version,x-requested-with
+      access-control-allow-methods:
+      - DELETE,GET,OPTIONS,PATCH,POST,PUT
+      access-control-allow-origin:
+      - '*'
+      airtable-uncompressed-content-length:
+      - '336'
+      content-encoding:
+      - gzip
+    status:
+      code: 200
+      message: OK
+version: 1

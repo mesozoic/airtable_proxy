@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "airtable_proxy"
+version = "0.1.0"
+description = ""
+authors = ["Alex Levy <mesozoic@users.noreply.github.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "airtable_proxy"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pyairtable = {git = "https://github.com/mesozoic/pyairtable", rev = "metadata"}
+flask = "^2.3.2"
+diskcache = "^5.6.1"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+mypy = "^1.4.1"
+pytest-vcr = "^1.0.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
