@@ -1,0 +1,58 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.31.0
+      authorization:
+      - ''
+    method: GET
+    uri: https://api.airtable.com/v0/appG3A7GCIJjrjf8j/tblH5kStARFR6wTwX?filterByFormula=OR%28RECORD_ID%28%29%3D%27rec2gjdwMTRE5EewZ%27%29&returnFieldsByFieldId=1
+  response:
+    body:
+      string: '{"error":{"type":"AUTHENTICATION_REQUIRED","message":"Authentication
+        required"}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '80'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Fri, 11 Aug 2023 04:27:32 GMT
+      ETag:
+      - W/"50-8xYAvLBWleFLl/buYhG+M42uVZo"
+      Server:
+      - Tengine
+      Set-Cookie:
+      - AWSALB=CM0HfzdLJZ9bjTL65jT+2qcmzbrbeiUx1mn1MLjc4dhCigvFsE1JPS67PbFzyxSaPRUodFBZ1a12KH6RfeW1jCmu2hyxfyQQUhyZmM4fBwm9W76+MfgBqHGkU59Y;
+        Expires=Fri, 18 Aug 2023 04:27:32 GMT; Path=/
+      - AWSALBCORS=CM0HfzdLJZ9bjTL65jT+2qcmzbrbeiUx1mn1MLjc4dhCigvFsE1JPS67PbFzyxSaPRUodFBZ1a12KH6RfeW1jCmu2hyxfyQQUhyZmM4fBwm9W76+MfgBqHGkU59Y;
+        Expires=Fri, 18 Aug 2023 04:27:32 GMT; Path=/; SameSite=None; Secure
+      - brw=brwZVgNg2fJvD1yOc; path=/; expires=Sun, 11 Aug 2024 04:27:32 GMT; domain=.airtable.com;
+        samesite=none; secure
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - DENY
+      access-control-allow-headers:
+      - authorization,content-length,content-type,user-agent,x-airtable-application-id,x-airtable-user-agent,x-api-version,x-requested-with
+      access-control-allow-methods:
+      - DELETE,GET,OPTIONS,PATCH,POST,PUT
+      access-control-allow-origin:
+      - '*'
+    status:
+      code: 401
+      message: Unauthorized
+version: 1

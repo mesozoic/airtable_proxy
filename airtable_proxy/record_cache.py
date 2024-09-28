@@ -1,31 +1,39 @@
 """
 Utilities for remembering and updating records in Airtable bases.
 """
+
 from __future__ import annotations
 
+import functools
 import time
 from collections import defaultdict
-from functools import partial
 from json import dumps as json_dumps
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import Any, Callable, TypeAlias
 
 import diskcache  # type: ignore
 import pyairtable
-import pyairtable.metadata
 from pyairtable.api.types import RecordDict, RecordId
 from pyairtable.models.schema import BaseSchema
+from typing_extensions import ParamSpec, TypeVar
 
+T = TypeVar("T")
+P = ParamSpec("P")
 Records: TypeAlias = "dict[RecordId, RecordDict]"
 TableId: TypeAlias = str
 FieldId: TypeAlias = str
 
 
-class rpartial(partial):
-    def __call__(self, *args, **kwargs):
-        kw = self.keywords.copy()
-        kw.update(kwargs)
-        return self.func(*(args + self.args), **kw)
+def rpartial(func: Callable[P, T], *p_args: Any, **p_kwargs: Any) -> Callable[..., T]:
+    """
+    Like functools.partial, but appends arguments instead of prepending them.
+    """
+
+    @functools.wraps(func)
+    def _wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
+        return func(*args, *p_args, **p_kwargs, **kwargs)
+
+    return _wrapped
 
 
 def key(obj: Any, suffix: str) -> str:
@@ -33,7 +41,10 @@ def key(obj: Any, suffix: str) -> str:
         try:
             obj = obj["id"]
         except (KeyError, TypeError):
-            obj = obj.id
+            try:
+                obj = obj.id
+            except AttributeError:
+                obj = obj.name
     return f"{obj}/{suffix}"
 
 
@@ -62,7 +73,6 @@ class RecordCache:
 
     Each key will also have corresponding metadata keys, in the following format:
 
-        * ``{key}:json`` - pre-encoded JSON blob of the data stored at that key
         * ``{key}:ts`` - Unix timestamp of when the key's data was last fetched
     """
 
@@ -78,14 +88,16 @@ class RecordCache:
     def dump(self) -> dict[str, Any]:
         return {key: self.get(key) for key in self._cache.iterkeys()}
 
-    def set(
-        self, key: str, value: Any, ts: float | None = None, json: Any = None
-    ) -> None:
+    def set(self, key: str, value: Any, ts: float | None = None) -> None:
         ts = time.time() if ts is None else ts
-        json = json_dumps(value if json is None else json)
         self._cache.set(key, value, expire=None, retry=True)
-        self._cache.set(f"{key}:ts", ts, expire=None, retry=None)
-        self._cache.set(f"{key}:json", json, expire=None, retry=True)
+        self._cache.set(key + ":ts", ts, expire=None, retry=None)
+
+    def get(self, key: str, /, default: Any = None) -> Any:
+        return self._cache.get(key, default=default)
+
+    def get_with_ts(self, key: str, /, default: Any = None) -> tuple[Any, int]:
+        return (self.get(key, default=default), self.get(key + ":ts"))
 
     def set_records(
         self,
@@ -93,21 +105,14 @@ class RecordCache:
         records: list[RecordDict] | Records,
         ts: float | None = None,
     ) -> None:
-        table = table.name if isinstance(table, pyairtable.Table) else table
         ts = time.time() if ts is None else ts
         if isinstance(records, list):
             records = {record["id"]: record for record in records}
-        json = {
-            record["id"]: record
-            for record in self.convert_field_ids(table, list(records.values()))
-        }
-        self.set(records_key(table), records, ts=ts, json=json)
-
-    def get(self, key: str, /, default: Any = None) -> Any:
-        return self._cache.get(key, default=default)
-
-    def get_with_ts(self, key: str, /, default: Any = None) -> tuple[Any, int]:
-        return (self.get(key, default=default), self.get(key + ":ts"))
+        json = json_dumps(
+            {"records": self.convert_field_ids(table, list(records.values()))}
+        )
+        self.set(records_key(table), records, ts=ts)
+        self.set(records_key(table) + "/json", json, ts=ts)
 
     def reload(self, base: pyairtable.Base) -> None:
         schema = self.reload_base_schema(base)
@@ -127,7 +132,7 @@ class RecordCache:
 
     def reload_table(self, table: pyairtable.Table) -> None:
         records_ts = time.time()
-        records = table.all(return_fields_by_field_id=True)
+        records = table.all(use_field_ids=True)
         self.set_records(table, records, ts=records_ts)
         for record in records:
             self.set(record["id"], record, ts=records_ts)
@@ -136,22 +141,22 @@ class RecordCache:
         formula = "OR(%s)" % ", ".join(
             f"RECORD_ID()={record_id!r}" for record_id in record_ids
         )
-        records: Records = self.get(records_key(table.name), {})
+        records: Records = self.get(records_key(table), {})
         updated_ts = time.time()
-        updated = table.all(formula=formula, return_fields_by_field_id=True)
+        updated = table.all(formula=formula, use_field_ids=True)
         records.update({record["id"]: record for record in updated})
         self.set_records(table, list(records.values()), ts=updated_ts)
         for record in updated:
             self.set(record["id"], record, ts=updated_ts)
 
     def delete_records(self, table: pyairtable.Table, record_ids: list[str]) -> None:
-        records: Records = self.get(records_key(table.name), {})
-        records_ts = self.get(records_key(table.name) + ":ts")  # preserve timestamp
+        records: Records = self.get(records_key(table), {})
+        records_ts = self.get(records_key(table) + ":ts")  # preserve timestamp
         if not (records and record_ids):
             return
         for deleted_id in record_ids:
             records.pop(deleted_id, None)
-        self.set(records_key(table.name), records, ts=records_ts)
+        self.set(records_key(table), records, ts=records_ts)
         for deleted_id in record_ids:
             self._cache.delete(deleted_id)
 
@@ -185,6 +190,13 @@ class RecordCache:
         changed_tables: list[TableId] = []
         changed_records: dict[TableId, list[RecordId]] = defaultdict(list)
 
+        # Load up a list of all the changes we need to make at once,
+        # so we can perform them in fewer trips to the database.
+        #
+        # This is a tradeoff vs freshness of data, since we might spend
+        # a long time iterating through the list of payloads. We can
+        # reconsider this tradeoff at any point.
+        #
         for payload in webhook.payloads(cursor=cursor):
             created_tables.extend(payload.created_tables_by_id)
             destroyed_tables.extend(payload.destroyed_table_ids)
@@ -200,6 +212,13 @@ class RecordCache:
                         and field_change.previous != field_change.current
                     ):
                         tables_with_renamed_fields.add(table_id)
+
+        if payload.cursor is not None:
+            self.set(cursor_key(base), payload.cursor + 1)
+
+        # This series of steps is inefficient; we will read and write
+        # the 'records' key/value pair several times. Optimization is
+        # saved for a future point where the algorithm is reliable.
 
         for table_id in destroyed_tables:
             self.destroy_table(table_id)
@@ -226,6 +245,7 @@ class RecordCache:
     def destroy_table(self, table_id: str) -> None:
         self._cache.delete(records_key(table_id))
         self._cache.delete(schema_key(table_id))
+        self._cache.delete(fields_key(table_id))
 
     def destroy_fields(self, table_id: str, field_ids: list[str]) -> None:
         records: Records = self.get(records_key(table_id), {})

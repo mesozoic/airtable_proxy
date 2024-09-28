@@ -8,6 +8,7 @@ def vcr_config():
     return {
         # Replace the Authorization request header in cassettes
         "filter_headers": [("authorization", "")],
+        "record_mode": "new_episodes",
     }
 
 
