@@ -4,17 +4,21 @@ Utilities for remembering and updating records in Airtable bases.
 
 from __future__ import annotations
 
-import functools
-import time
 from collections import defaultdict
-from json import dumps as json_dumps
 from pathlib import Path
-from typing import Any, Callable, TypeAlias
+from typing import Iterable, TypeAlias
 
 import diskcache  # type: ignore
 import pyairtable
-from pyairtable.api.types import RecordDict, RecordId
+from pyairtable.api.types import (
+    RecordDict,
+    RecordId,
+    assert_typed_dict,
+    assert_typed_dicts,
+)
+from pyairtable.models import Webhook, WebhookPayload
 from pyairtable.models.schema import BaseSchema
+from pyairtable.utils import chunked
 from typing_extensions import ParamSpec, TypeVar
 
 T = TypeVar("T")
@@ -24,164 +28,93 @@ TableId: TypeAlias = str
 FieldId: TypeAlias = str
 
 
-def rpartial(func: Callable[P, T], *p_args: Any, **p_kwargs: Any) -> Callable[..., T]:
-    """
-    Like functools.partial, but appends arguments instead of prepending them.
-    """
-
-    @functools.wraps(func)
-    def _wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
-        return func(*args, *p_args, **p_kwargs, **kwargs)
-
-    return _wrapped
-
-
-def key(obj: Any, suffix: str) -> str:
-    if not isinstance(obj, (str, int)):
-        try:
-            obj = obj["id"]
-        except (KeyError, TypeError):
-            try:
-                obj = obj.id
-            except AttributeError:
-                obj = obj.name
-    return f"{obj}/{suffix}"
-
-
-hook_key = rpartial(key, "webhook")
-cursor_key = rpartial(key, "webhook/cursor")
-tables_key = rpartial(key, "tables")
-records_key = rpartial(key, "records")
-schema_key = rpartial(key, "schema")
-fields_key = rpartial(key, "fields")
-
-
 class RecordCache:
     """
     Wraps around a persisted cache or database to store record information.
-
-    Assumes a flat key-value store, so uses the following key conventions:
-
-        * ``{base_id}/webhook`` - the webhook ID that we use to poll for data changes
-        * ``{base_id}/webhook/cursor`` - the next cursor to use when fetching webhook payloads
-        * ``{base_id}/tables`` - a list of table IDs in the given base
-        * ``{base_id}/schema`` - the full schema of every table in the base
-        * ``{table_id}/records`` - every record in the table, keyed by ID
-        * ``{table_id}/schema`` - the full schema of the given table
-        * ``{table_id}/fields`` - a mapping of field IDs to field information
-        * ``{record_id}`` - a single Airtable record
-
-    Each key will also have corresponding metadata keys, in the following format:
-
-        * ``{key}:ts`` - Unix timestamp of when the key's data was last fetched
     """
 
-    def __init__(self, location: Path, api: pyairtable.Api):
-        self.location = location
+    def __init__(
+        self,
+        location: Path | str,
+        api: pyairtable.Api,
+        *,
+        size_limit: int = 2**33,  # 8 GB
+    ):
+        self.location = location if isinstance(location, Path) else Path(location)
         self.api = api
-        self._cache = diskcache.Cache(
-            directory=location,
-            size_limit=int(4e9),
+        self.persisted = diskcache.Cache(
+            location,
+            size_limit=size_limit,
             cull_limit=0,
         )
 
-    def dump(self) -> dict[str, Any]:
-        return {key: self.get(key) for key in self._cache.iterkeys()}
+    def reload_base(self, base: str | pyairtable.Base) -> None:
+        base_id = base.id if isinstance(base, pyairtable.Base) else base
+        base_schema = self.reload_base_schema(base_id)
+        for table_schema in base_schema.tables:
+            self.reload_table(base_id, table_schema.id)
 
-    def set(self, key: str, value: Any, ts: float | None = None) -> None:
-        ts = time.time() if ts is None else ts
-        self._cache.set(key, value, expire=None, retry=True)
-        self._cache.set(key + ":ts", ts, expire=None, retry=None)
-
-    def get(self, key: str, /, default: Any = None) -> Any:
-        return self._cache.get(key, default=default)
-
-    def get_with_ts(self, key: str, /, default: Any = None) -> tuple[Any, int]:
-        return (self.get(key, default=default), self.get(key + ":ts"))
-
-    def set_records(
-        self,
-        table: pyairtable.Table | str,
-        records: list[RecordDict] | Records,
-        ts: float | None = None,
-    ) -> None:
-        ts = time.time() if ts is None else ts
-        if isinstance(records, list):
-            records = {record["id"]: record for record in records}
-        json = json_dumps(
-            {"records": self.convert_field_ids(table, list(records.values()))}
+    def remove_base(self, base_id: str) -> None:
+        """
+        Remove all data and metadata for the given base.
+        """
+        self.persisted.set(
+            Keys.tracked_bases,
+            self.persisted.get(Keys.tracked_bases, set()) - {base_id},
         )
-        self.set(records_key(table), records, ts=ts)
-        self.set(records_key(table) + "/json", json, ts=ts)
+        for table_schema in self.base_schema(base_id).tables:
+            self.remove_table(base_id, table_schema.id)
+        self.persisted.delete(Keys.webhook(base_id))
+        self.persisted.delete(Keys.webhook_cursor(base_id))
+        self.persisted.delete(Keys.schema(base_id))
 
-    def reload(self, base: pyairtable.Base) -> None:
-        schema = self.reload_base_schema(base)
-        tables = [base.table(t.id) for t in schema.tables]
-        for table in tables:
-            self.reload_table(table)
-
-    def reload_base_schema(self, base: pyairtable.Base) -> BaseSchema:
-        schema = base.schema()
-        self.set(schema_key(base), schema._raw)
-        self.set(tables_key(base), [t.id for t in schema.tables])
-        for table_schema in schema.tables:
-            fields_by_id = {f.id: f.dict() for f in table_schema.fields}
-            self.set(schema_key(table_schema), table_schema.dict())
-            self.set(fields_key(table_schema), fields_by_id)
-        return schema
-
-    def reload_table(self, table: pyairtable.Table) -> None:
-        records_ts = time.time()
-        records = table.all(use_field_ids=True)
-        self.set_records(table, records, ts=records_ts)
-        for record in records:
-            self.set(record["id"], record, ts=records_ts)
-
-    def reload_records(self, table: pyairtable.Table, record_ids: list[str]) -> None:
-        formula = "OR(%s)" % ", ".join(
-            f"RECORD_ID()={record_id!r}" for record_id in record_ids
-        )
-        records: Records = self.get(records_key(table), {})
-        updated_ts = time.time()
-        updated = table.all(formula=formula, use_field_ids=True)
-        records.update({record["id"]: record for record in updated})
-        self.set_records(table, list(records.values()), ts=updated_ts)
-        for record in updated:
-            self.set(record["id"], record, ts=updated_ts)
-
-    def delete_records(self, table: pyairtable.Table, record_ids: list[str]) -> None:
-        records: Records = self.get(records_key(table), {})
-        records_ts = self.get(records_key(table) + ":ts")  # preserve timestamp
-        if not (records and record_ids):
-            return
-        for deleted_id in record_ids:
-            records.pop(deleted_id, None)
-        self.set(records_key(table), records, ts=records_ts)
-        for deleted_id in record_ids:
-            self._cache.delete(deleted_id)
-
-    def convert_field_ids(
-        self,
-        table: pyairtable.Table | str,
-        records: list[RecordDict],
-    ) -> list[RecordDict]:
-        fields_by_id = self.get(fields_key(table), {})
-        return [
-            {
-                "id": record["id"],
-                "createdTime": record["createdTime"],
-                "fields": {
-                    fields_by_id[field_id]["name"]: field_value
-                    for (field_id, field_value) in record["fields"].items()
+    def webhook(self, base_id: str) -> Webhook:
+        """
+        Return the webhook for the given base, creating it if necessary,
+        along with the cursor we should use to poll for changes.
+        """
+        cache_key = Keys.webhook(base_id)
+        try:
+            webhook_id = self.persisted[cache_key]
+        except KeyError:
+            created = self.api.base(base_id).add_webhook(
+                notify_url="",
+                spec={
+                    "filters": {
+                        "dataTypes": ["tableData", "tableFields", "tableMetadata"],
+                    },
+                    "includes": {
+                        "includeCellValuesInFieldIds": "all",
+                    },
                 },
-            }
-            for record in records
-        ]
+            )
+            self.persisted[cache_key] = created.id
+            self.persisted[Keys.webhook_cursor(base_id)] = 1
+            webhook_id = created.id
+        return self.api.base(base_id).webhook(webhook_id)
 
     def poll(self, base_id: str) -> None:
-        base = self.api.base(base_id)
-        webhook = base.webhook(self.get(hook_key(base)))
-        cursor = self.get(cursor_key(base), 1)
+        """
+        Poll the webhook on this base for changes, and update the cache accordingly.
+        """
+        webhook = self.webhook(base_id)
+        cursor_key = Keys.webhook_cursor(base_id)
+        cursor = self.persisted.get(cursor_key, 1)
+        payloads = list(webhook.payloads(cursor=cursor))
+        self.apply_payloads(base_id, payloads)
+        if payloads[-1].cursor is not None:
+            self.persisted[cursor_key] = payloads[-1].cursor + 1
+
+    def apply_payloads(
+        self,
+        base_id: str,
+        payloads: Iterable[WebhookPayload],
+    ) -> None:
+        """
+        Apply the changes in the given webhook payloads to the cache.
+        """
+        raise NotImplementedError("definitely has bugs")
+
         destroyed_tables: list[TableId] = []
         destroyed_fields: dict[TableId, list[FieldId]] = defaultdict(list)
         destroyed_records: dict[TableId, list[RecordId]] = defaultdict(list)
@@ -191,13 +124,13 @@ class RecordCache:
         changed_records: dict[TableId, list[RecordId]] = defaultdict(list)
 
         # Load up a list of all the changes we need to make at once,
-        # so we can perform them in fewer trips to the database.
+        # so we can perform them in fewer trips to the API.
         #
         # This is a tradeoff vs freshness of data, since we might spend
         # a long time iterating through the list of payloads. We can
         # reconsider this tradeoff at any point.
         #
-        for payload in webhook.payloads(cursor=cursor):
+        for payload in payloads:
             created_tables.extend(payload.created_tables_by_id)
             destroyed_tables.extend(payload.destroyed_table_ids)
             changed_tables.extend(payload.changed_tables_by_id)
@@ -213,69 +146,248 @@ class RecordCache:
                     ):
                         tables_with_renamed_fields.add(table_id)
 
-        if payload.cursor is not None:
-            self.set(cursor_key(base), payload.cursor + 1)
-
-        # This series of steps is inefficient; we will read and write
-        # the 'records' key/value pair several times. Optimization is
-        # saved for a future point where the algorithm is reliable.
-
         for table_id in destroyed_tables:
-            self.destroy_table(table_id)
-
-        for table_id, field_ids in destroyed_fields.items():
-            self.destroy_fields(table_id, field_ids)
+            self.remove_table(base_id, table_id)
 
         for table_id, record_ids in destroyed_records.items():
-            self.destroy_records(table_id, record_ids)
+            if table_id not in destroyed_tables:
+                self.remove_records(base_id, table_id, record_ids)
+
+        for table_id, field_ids in destroyed_fields.items():
+            if table_id not in destroyed_tables:
+                self.remove_fields(base_id, table_id, field_ids)
 
         if destroyed_tables or created_tables or changed_tables:
-            self.reload_base_schema(base)
+            self.reload_base_schema(base_id)
 
-        for table_id in created_tables:
-            self.reload_table(base.table(table_id))
+        reload_tables = [*created_tables, *tables_with_renamed_fields]
+        for table_id in reload_tables:
+            if table_id not in destroyed_tables:
+                self.reload_table(base_id, table_id)
 
         for table_id, record_ids in changed_records.items():
-            self.reload_records(base.table(table_id), record_ids)
+            if table_id in destroyed_tables or table_id in reload_tables:
+                continue
+            self.reload_records(base_id, table_id, record_ids)
 
-        for table_id in tables_with_renamed_fields:
-            if table_id not in changed_records:
-                self.rebuild_table_json(table_id)
+    def base_schema(self, base_id: str) -> BaseSchema:
+        """
+        Retrieve the schema for the given base from the cache.
+        """
+        return BaseSchema(**self.persisted[Keys.schema(base_id)])
 
-    def destroy_table(self, table_id: str) -> None:
-        self._cache.delete(records_key(table_id))
-        self._cache.delete(schema_key(table_id))
-        self._cache.delete(fields_key(table_id))
+    def reload_base_schema(self, base_id: str) -> BaseSchema:
+        """
+        Re-read the schema for the given base, and update the cache.
+        """
+        schema = self.api.base(base_id).schema(force=True)
+        self.persisted[Keys.schema(base_id)] = schema._raw
+        return schema
 
-    def destroy_fields(self, table_id: str, field_ids: list[str]) -> None:
-        records: Records = self.get(records_key(table_id), {})
-        for record_id, record in records.items():
+    def reload_table(self, base_id: str, table_id_or_name: str) -> None:
+        """
+        Re-fetch all records for the given table in the given base.
+        """
+        table = self.api.base(base_id).table(table_id_or_name)
+        records = table.all(use_field_ids=True)
+        self.update_records(base_id, table_id_or_name, records, replace=True)
+
+    def reload_records(
+        self,
+        base_id: str,
+        table_id_or_name: str,
+        record_ids: Iterable[RecordId],
+    ) -> None:
+        """
+        Re-fetch a subset of records for the given table in the given base.
+        """
+        table = self.api.base(base_id).table(table_id_or_name)
+        # passing over 100 conditions at once tends to hang the API request
+        formulas = [
+            "OR(%s)" % ", ".join(f"RECORD_ID()={record_id!r}" for record_id in chunk)
+            for chunk in chunked(list(record_ids), 100)
+        ]
+        records = [
+            record
+            for formula in formulas
+            for record in table.all(formula=formula, use_field_ids=True)
+        ]
+        self.update_records(base_id, table_id_or_name, records, replace=False)
+
+    def get_records(
+        self, base_id: str, table_id_or_name: str, *, use_field_ids: bool = False
+    ) -> list[RecordDict]:
+        """
+        Get all cached records, or retrieve them from the API and store them.
+        """
+        if use_field_ids:
+            cache_key = Keys.records_using_ids(base_id, table_id_or_name)
+        else:
+            cache_key = Keys.records(base_id, table_id_or_name)
+        try:
+            return assert_typed_dicts(RecordDict, self.persisted[cache_key])
+        except KeyError:
+            self.reload_table(base_id, table_id_or_name)
+            return assert_typed_dicts(RecordDict, self.persisted[cache_key])
+
+    def update_records(
+        self,
+        base_id: str,
+        table_id_or_name: str,
+        records: Iterable[RecordDict],
+        *,
+        replace: bool = False,
+    ) -> None:
+        """
+        Add to (or replace) cached records for the given table in the given base.
+
+        Stores several kinds of cache keys:
+
+            * ``${base_id}/${table_id}``
+            * ``${base_id}/${table_id}:use_field_ids``
+            * ``${base_id}/${table_id}/${record_id}``
+            * ``${base_id}/${table_id}/${record_id}:use_field_ids``
+            * ``${base_id}/${table_name}``
+            * ``${base_id}/${table_name}:use_field_ids``
+            * ``${base_id}/${table_name}/${record_id}``
+            * ``${base_id}/${table_name}/${record_id}:use_field_ids``
+        """
+        table_schema = self.base_schema(base_id).table(table_id_or_name)
+        table_tag = Keys.table(base_id, table_schema.id)
+        if replace:
+            self.persisted.evict(table_tag)
+
+        # Cache a list of all records for each table, with and without field IDs.
+        # This can be expensive if there are many records, so we do it now
+        # instead of on every get_records() call.
+        for table_key in (table_schema.id, table_schema.name):
+            for table_cache_key, field_attr in [
+                (Keys.records_using_ids(base_id, table_key), "id"),
+                (Keys.records(base_id, table_key), "name"),
+            ]:
+                replacements = self.persisted.get(table_cache_key, []) + [
+                    {
+                        "id": record["id"],
+                        "createdTime": record["createdTime"],
+                        "fields": {
+                            getattr(table_schema.field(field_id), field_attr): value
+                            for field_id, value in record["fields"].items()
+                        },
+                    }
+                    for record in records
+                ]
+                self.persisted.set(table_cache_key, value=replacements, tag=table_tag)
+
+            # Cache each individual record, with and without field IDs
+            for record in records:
+                for record_key, field_attr in [
+                    (Keys.record_using_ids(base_id, table_key, record["id"]), "id"),
+                    (Keys.record(base_id, table_key, record["id"]), "name"),
+                ]:
+                    self.persisted.set(
+                        record_key,
+                        tag=table_tag,
+                        value={
+                            "id": record["id"],
+                            "createdTime": record["createdTime"],
+                            "fields": {
+                                getattr(table_schema.field(field_id), field_attr): value
+                                for field_id, value in record["fields"].items()
+                            },
+                        },
+                    )
+
+    def get_record(
+        self,
+        base_id: str,
+        table_id_or_name: str,
+        record_id: str,
+        *,
+        use_field_ids: bool = False,
+    ) -> RecordDict:
+        """
+        Get a single record by its ID, or retrieve it from the API and store it.
+        """
+        key_fn = Keys.record_using_ids if use_field_ids else Keys.record
+        key = key_fn(base_id, table_id_or_name, record_id)
+        try:
+            return assert_typed_dict(RecordDict, self.persisted[key])
+        except KeyError:
+            self.reload_records(base_id, table_id_or_name, [record_id])
+            return assert_typed_dict(RecordDict, self.persisted[key])
+
+    def remove_table(self, base_id: str, table_id_or_name: str) -> None:
+        """
+        Remove all records and schema information for the given table.
+        """
+        try:
+            table_schema = self.base_schema(base_id).table(table_id_or_name)
+        except KeyError:
+            # We don't have schema information for this table anymore,
+            # so make best effort to clear what we can.
+            self.persisted.delete(Keys.records(base_id, table_id_or_name))
+            self.persisted.delete(Keys.records_using_ids(base_id, table_id_or_name))
+        else:
+            self.persisted.evict(Keys.table(base_id, table_schema.id))
+
+    def remove_records(
+        self, base_id: str, table_id: str, record_ids: Iterable[str]
+    ) -> None:
+        """
+        Remove the given records from the cache.
+        """
+        record_ids = list(record_ids)
+        records = self.get_records(base_id, table_id, use_field_ids=True)
+        records = [record for record in records if record["id"] not in record_ids]
+        self.update_records(base_id, table_id, records, replace=True)
+
+    def remove_fields(
+        self, base_id: str, table_id: str, field_ids: Iterable[str]
+    ) -> None:
+        """
+        Remove the given fields from all cached records in the given table.
+        """
+        field_ids = list(field_ids)
+        records = self.get_records(base_id, table_id, use_field_ids=True)
+        for record in records:
             for field_id in field_ids:
-                try:
-                    del record["fields"][field_id]
-                except KeyError:
-                    pass
-            self.set(record_id, record)
+                record["fields"].pop(field_id, None)
+        self.update_records(base_id, table_id, records, replace=True)
 
-        self.set_records(table_id, records)
 
-    def destroy_records(self, table_id: str, record_ids: list[str]) -> None:
-        records: Records = self.get(records_key(table_id), {}).items()
-        self.set_records(
-            table_id,
-            {
-                record_id: record
-                for (record_id, record) in records.items()
-                if record_id not in record_ids
-            },
-        )
-        for record_id in record_ids:
-            self._cache.delete(record_id)
+class Keys:
+    tracked_bases = "base_ids"
 
-    def rebuild_table_json(self, table_id: str) -> None:
-        """
-        Regenerate the precomputed JSON for a table's records, so that
-        any new field names get
-        """
-        records: Records = self.get(records_key(table_id), {})
-        self.set_records(table_id, records)
+    @staticmethod
+    def webhook(base: str) -> str:
+        return f"{base}/webhook"
+
+    @staticmethod
+    def webhook_cursor(base: str) -> str:
+        return f"{base}/webhook/cursor"
+
+    @staticmethod
+    def table(base: str, table: str) -> str:
+        return f"{base}/tables/{table}"
+
+    @staticmethod
+    def records(base: str, table: str) -> str:
+        return f"{base}/tables/{table}/records"
+
+    @staticmethod
+    def records_using_ids(base: str, table: str) -> str:
+        return f"{base}/tables/{table}/records:use_field_ids"
+
+    @staticmethod
+    def record(base: str, table: str, record_id: str) -> str:
+        return f"{base}/tables/{table}/{record_id}/records"
+
+    @staticmethod
+    def record_using_ids(base: str, table: str, record_id: str) -> str:
+        return f"{base}/tables/{table}/{record_id}/records:use_field_ids"
+
+    # Keys prefixed with "@" represent an exact path to the Airtable API.
+
+    @staticmethod
+    def schema(base: str) -> str:
+        return f"@meta/bases/{base}/tables"

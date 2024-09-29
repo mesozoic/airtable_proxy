@@ -1,0 +1,142 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.32.3
+      authorization:
+      - ''
+    method: GET
+    uri: https://api.airtable.com/v0/meta/bases/appG3A7GCIJjrjf8j/tables?include=visibleFieldIds
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAA/42SXXOiMBSG/4qTay/8KMy0d35R3QJtke5ad7xAiHhsSDCJgjr+9ybVLpmVndnh
+        gklynifJm3NCMloSLNDD7xOCBD0guSRj62Mqe4ET2EVYzFAT0SjDainUpY22msg5ZBE/OIBJMtHU
+        iiSBu/F+eP3N25LaM0cVrfTqxSwPuRYIoCnBLlAc4lKqEvgXe93R179z848g2xEJ5JZ/+gDxi84f
+        eXn0RGnwTKq7GYLLCaaY4FjzLJfAqDrjCcVrBrEZhMCkNT7i13S0bW9fnkehEQRLmBrFjDCuhhwn
+        LqRr2fna6RuO7g8T1+7OrWFUtuwKntBGzlnKsRCG44AJYUWNZi8G2/7Iv3McKFtppRkyig1e+TD9
+        xhfnKpr3MCg7w0xAZrmrccVPZSR34n/CHXR68Gx1Hep3V65XGVxG08ZXrSHhEK//4tPEd/u+5ZXH
+        fGi/V3ygSm/4ywMNGCHRkvFIqssZJ+nNi8189za542G3XZl6QkBKsWqVRRPtARfGM+6hCHahzKLZ
+        9GdnhsWmwh45JA1drqau26dqCmmHANXr1/7WtvoOr+m8usjrQqwL5vaKi7P+PgGUdRQSpgMAAA==
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '454'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Sun, 29 Sep 2024 19:48:55 GMT
+      Server:
+      - Tengine
+      Set-Cookie:
+      - AWSALBTG=PxYOB6IqfCpQzhsqPOASbM4uSihBuQNGjUK+B7DEh7eu6uAqNHwtgpNvzwpIa4OVtgXnWfEdkPh8YxRZgYNE9S2GhWf2vHnouetnyrrfE9T/cx0DYeGeysTT9YH9IAKRbHQEfAv8lJv3g4ju/ay+W2h7gi3QRV+DKvJIrjQCoFx2HQO1jOw=;
+        Expires=Sun, 06 Oct 2024 19:48:54 GMT; Path=/
+      - AWSALBTGCORS=PxYOB6IqfCpQzhsqPOASbM4uSihBuQNGjUK+B7DEh7eu6uAqNHwtgpNvzwpIa4OVtgXnWfEdkPh8YxRZgYNE9S2GhWf2vHnouetnyrrfE9T/cx0DYeGeysTT9YH9IAKRbHQEfAv8lJv3g4ju/ay+W2h7gi3QRV+DKvJIrjQCoFx2HQO1jOw=;
+        Expires=Sun, 06 Oct 2024 19:48:54 GMT; Path=/; SameSite=None; Secure
+      - brw=brwVae2IUR52nxxUS; path=/; expires=Mon, 29 Sep 2025 19:48:54 GMT; domain=.airtable.com;
+        samesite=none; secure
+      - brwConsent=opt-in; path=/; expires=Sun, 29 Sep 2024 19:53:54 GMT; domain=.airtable.com;
+        samesite=none; secure
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - DENY
+      access-control-allow-headers:
+      - authorization,content-length,content-type,user-agent,x-airtable-application-id,x-airtable-user-agent,x-api-version,x-requested-with
+      access-control-allow-methods:
+      - DELETE,GET,OPTIONS,PATCH,POST,PUT
+      access-control-allow-origin:
+      - '*'
+      airtable-datacenter-regions:
+      - us-east-1
+      airtable-uncompressed-content-length:
+      - '934'
+      content-encoding:
+      - gzip
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Cookie:
+      - AWSALBTG=PxYOB6IqfCpQzhsqPOASbM4uSihBuQNGjUK+B7DEh7eu6uAqNHwtgpNvzwpIa4OVtgXnWfEdkPh8YxRZgYNE9S2GhWf2vHnouetnyrrfE9T/cx0DYeGeysTT9YH9IAKRbHQEfAv8lJv3g4ju/ay+W2h7gi3QRV+DKvJIrjQCoFx2HQO1jOw=;
+        AWSALBTGCORS=PxYOB6IqfCpQzhsqPOASbM4uSihBuQNGjUK+B7DEh7eu6uAqNHwtgpNvzwpIa4OVtgXnWfEdkPh8YxRZgYNE9S2GhWf2vHnouetnyrrfE9T/cx0DYeGeysTT9YH9IAKRbHQEfAv8lJv3g4ju/ay+W2h7gi3QRV+DKvJIrjQCoFx2HQO1jOw=;
+        brw=brwVae2IUR52nxxUS; brwConsent=opt-in
+      User-Agent:
+      - python-requests/2.32.3
+      authorization:
+      - ''
+    method: GET
+    uri: https://api.airtable.com/v0/appG3A7GCIJjrjf8j/tblH5kStARFR6wTwX?returnFieldsByFieldId=1
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAA/62PTW+CQBRFf0tnrc0wdJCyA5EYBYwwNtqPBTADjA4fAStW4n8vbNqQ1E3j9r37
+        3j2nBRWLiorWQHtrAadA6wco2dPGId4Mz1jzCkYgqlhwZJTwjHUJBJE8huoYTog00aRnTVYeIYR9
+        MOZM9M9aEAvq2Xtn4Rj7TZgrW6s71EWZBuB6Hf1WWWWQ1txXs6VffdL7VRlVcCr6lKA74p2RmdU8
+        w3Y873akoMWQYs2ThRSWK3urBxd8k0JSiaRq+ElD6p8UU6TzFZat3JVj2+kO50yI4mHY5b9sOAyb
+        5Rp7sGzuZzxNg0pwdsPZLHI25DicyPGAolj/yk64/LdzQl3bcLFzvpSmsvtxfs+7to/rN0vcxkFg
+        AgAA
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '288'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Sun, 29 Sep 2024 19:48:55 GMT
+      Server:
+      - Tengine
+      Set-Cookie:
+      - AWSALBTG=SW+7y9iXsGzmmY8sFSXFC/6LW4dFdscDISGUrkcNN0DoNEWi4Cdcl6HZ6kFzI5KzJKon5dF29K3jlmegu2b5eqo9ePV6g05horFi8i9c7QdL2yb1XpPKeMNcIo1o4RPQ5viq1yiXLjVGHZeMPZVsH0vl611z6eas2m8+XdiJXDqMXj5GRqU=;
+        Expires=Sun, 06 Oct 2024 19:48:55 GMT; Path=/
+      - AWSALBTGCORS=SW+7y9iXsGzmmY8sFSXFC/6LW4dFdscDISGUrkcNN0DoNEWi4Cdcl6HZ6kFzI5KzJKon5dF29K3jlmegu2b5eqo9ePV6g05horFi8i9c7QdL2yb1XpPKeMNcIo1o4RPQ5viq1yiXLjVGHZeMPZVsH0vl611z6eas2m8+XdiJXDqMXj5GRqU=;
+        Expires=Sun, 06 Oct 2024 19:48:55 GMT; Path=/; SameSite=None; Secure
+      - brw=brwVae2IUR52nxxUS; path=/; expires=Mon, 29 Sep 2025 19:48:55 GMT; domain=.airtable.com;
+        samesite=none; secure
+      - brwConsent=opt-in; path=/; expires=Sun, 29 Sep 2024 19:53:55 GMT; domain=.airtable.com;
+        samesite=none; secure
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains; preload
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+      X-Frame-Options:
+      - DENY
+      access-control-allow-headers:
+      - authorization,content-length,content-type,user-agent,x-airtable-application-id,x-airtable-user-agent,x-api-version,x-requested-with
+      access-control-allow-methods:
+      - DELETE,GET,OPTIONS,PATCH,POST,PUT
+      access-control-allow-origin:
+      - '*'
+      airtable-datacenter-regions:
+      - us-east-1
+      airtable-uncompressed-content-length:
+      - '608'
+      content-encoding:
+      - gzip
+    status:
+      code: 200
+      message: OK
+version: 1
