@@ -1,0 +1,40 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Authorization:
+      - ''
+      Connection:
+      - keep-alive
+      User-Agent:
+      - Werkzeug/3.0.4
+    method: GET
+    uri: https://api.airtable.com/v0/meta/bases/appG3A7GCIJjrjf8j/tables
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAA/42STXPaMBCG/wqjMwc+Ys80N74caG2nNU5L6HAQ9iKWyJKRBDYw/PfKIak9TTvT
+        k0fS+zy7WvlCDF1z0OT+54VgSu6JWfOp8zI3g8iL3CIuFqRNBM3AHsVVtNW1G7nCjKqTh8DTWUVt
+        eBr5u+BzMNw9rYW78GxoU53ezOaUVwKNgnHwUUAMpbER/Bf7VjGsPtf2b0F24Ab5R/7LC+ofYvmg
+        ynOgywYvjb1bQ3DrYA4ckoqXuUEpbI8XkmwlJs1BaOCd6Rm+scm+u//6OIkbg5CptKtEcqnsUkHq
+        I9ua3muld5h+Os18t790xrTsuDU8E61cSaZA64bjBJzL4i+aox7th5PwzvOw7LBaM5YCGrz1gXjH
+        V9d6NM9xVPbGmcbM8TfTmp8bag76f4Y76g3w0el7Iuxv/KA2+FKw1mu2IVGYbP/gWRr6w9AJynM+
+        dp9rPrLRD/ztgUaSc7qWihp7uUYng2WxWx6eZncq7ndr00BrZALsr7JqkyNC0XjGIxbRITYZXcy/
+        9xagdzX2oDBtVXG79Vae2a1qfqvrL3oxCUgaAwAA
+    headers:
+      Content-Length:
+      - '429'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Wed, 09 Oct 2024 01:17:24 GMT
+      content-encoding:
+      - gzip
+    status:
+      code: 200
+      message: OK
+version: 1

@@ -4,6 +4,8 @@ from flask.testing import FlaskClient
 
 import airtable_proxy.app
 
+pytestmark = [pytest.mark.vcr]
+
 
 @pytest.fixture
 def app():
@@ -25,22 +27,13 @@ def test_unauthorized(app, base_id):
     assert response.status_code == 403
 
 
-# @pytest.mark.vcr
 def test_schema(client, auth_headers, base_id, table_id):
-    with requests_mock.Mocker() as m:
-        m.get(
-            f"/v0/meta/bases/{base_id}/tables",
-            json=SCHEMA,
-            headers={"Content-Type": "application/json"},
-        )
+    # This will make a network call (that will be intercepted by VCR)
+    r1 = client.get(f"/v0/meta/bases/{base_id}/tables", headers=auth_headers)
+    assert r1.status_code == 200
+    assert table_id in [table["id"] for table in r1.json["tables"]]
 
-        # This will make a network call (that will be intercepted by requests_mock)
-        r1 = client.get(f"/v0/meta/bases/{base_id}/tables", headers=auth_headers)
-        assert r1.status_code == 200
-        assert table_id in [table["id"] for table in r1.json["tables"]]
-        assert m.call_count == 1
-
-    # After this point we should not make any more network requests.
+    # After this point we should not allow any more network requests.
     with requests_mock.Mocker():
         r2 = client.get(f"/v0/meta/bases/{base_id}/tables", headers=auth_headers)
         assert r2.status_code == 200

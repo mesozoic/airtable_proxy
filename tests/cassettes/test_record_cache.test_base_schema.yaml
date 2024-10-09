@@ -6,12 +6,12 @@ interactions:
       - '*/*'
       Accept-Encoding:
       - gzip, deflate
+      Authorization:
+      - ''
       Connection:
       - keep-alive
       User-Agent:
       - python-requests/2.32.3
-      authorization:
-      - ''
     method: GET
     uri: https://api.airtable.com/v0/meta/bases/appG3A7GCIJjrjf8j/tables?include=visibleFieldIds
   response:
@@ -26,43 +26,12 @@ interactions:
         fGi/V3ygSm/4ywMNGCHRkvFIqssZJ+nNi8189za542G3XZl6QkBKsWqVRRPtARfGM+6hCHahzKLZ
         9GdnhsWmwh45JA1drqau26dqCmmHANXr1/7WtvoOr+m8usjrQqwL5vaKi7P+PgGUdRQSpgMAAA==
     headers:
-      Connection:
-      - keep-alive
       Content-Length:
       - '454'
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Sun, 29 Sep 2024 19:41:19 GMT
-      Server:
-      - Tengine
-      Set-Cookie:
-      - AWSALBTG=FzUi+RvSUO7lkNC4ZzlPxLtT33XSn47LbamHGKto/8RpLaqT3rU6ZrYspxvFDEzLU3KS6u6vjizACIbkcasLHOpWB4Q9ird49gaT9a6kMshtXRTcXTNKrc2rjg4eS/Yc7g9f6qO9IJC1SAQTzMZafGZWmq4HV1zBo2Q0Tpx7+PI2FS7O/zk=;
-        Expires=Sun, 06 Oct 2024 19:41:18 GMT; Path=/
-      - AWSALBTGCORS=FzUi+RvSUO7lkNC4ZzlPxLtT33XSn47LbamHGKto/8RpLaqT3rU6ZrYspxvFDEzLU3KS6u6vjizACIbkcasLHOpWB4Q9ird49gaT9a6kMshtXRTcXTNKrc2rjg4eS/Yc7g9f6qO9IJC1SAQTzMZafGZWmq4HV1zBo2Q0Tpx7+PI2FS7O/zk=;
-        Expires=Sun, 06 Oct 2024 19:41:18 GMT; Path=/; SameSite=None; Secure
-      - brw=brw24TxJhf720vlvx; path=/; expires=Mon, 29 Sep 2025 19:41:18 GMT; domain=.airtable.com;
-        samesite=none; secure
-      - brwConsent=opt-in; path=/; expires=Sun, 29 Sep 2024 19:46:18 GMT; domain=.airtable.com;
-        samesite=none; secure
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Vary:
-      - Accept-Encoding
-      X-Content-Type-Options:
-      - nosniff
-      X-Frame-Options:
-      - DENY
-      access-control-allow-headers:
-      - authorization,content-length,content-type,user-agent,x-airtable-application-id,x-airtable-user-agent,x-api-version,x-requested-with
-      access-control-allow-methods:
-      - DELETE,GET,OPTIONS,PATCH,POST,PUT
-      access-control-allow-origin:
-      - '*'
-      airtable-datacenter-regions:
-      - us-east-1
-      airtable-uncompressed-content-length:
-      - '934'
+      - Wed, 09 Oct 2024 01:17:25 GMT
       content-encoding:
       - gzip
     status:
@@ -75,16 +44,14 @@ interactions:
       - '*/*'
       Accept-Encoding:
       - gzip, deflate
+      Authorization:
+      - ''
       Connection:
       - keep-alive
       Cookie:
-      - AWSALBTG=FzUi+RvSUO7lkNC4ZzlPxLtT33XSn47LbamHGKto/8RpLaqT3rU6ZrYspxvFDEzLU3KS6u6vjizACIbkcasLHOpWB4Q9ird49gaT9a6kMshtXRTcXTNKrc2rjg4eS/Yc7g9f6qO9IJC1SAQTzMZafGZWmq4HV1zBo2Q0Tpx7+PI2FS7O/zk=;
-        AWSALBTGCORS=FzUi+RvSUO7lkNC4ZzlPxLtT33XSn47LbamHGKto/8RpLaqT3rU6ZrYspxvFDEzLU3KS6u6vjizACIbkcasLHOpWB4Q9ird49gaT9a6kMshtXRTcXTNKrc2rjg4eS/Yc7g9f6qO9IJC1SAQTzMZafGZWmq4HV1zBo2Q0Tpx7+PI2FS7O/zk=;
-        brw=brw24TxJhf720vlvx; brwConsent=opt-in
+      - ''
       User-Agent:
       - python-requests/2.32.3
-      authorization:
-      - ''
     method: GET
     uri: https://api.airtable.com/v0/appG3A7GCIJjrjf8j/tblH5kStARFR6wTwX?returnFieldsByFieldId=1
   response:
@@ -97,43 +64,12 @@ interactions:
         5Rp7sGzuZzxNg0pwdsPZLHI25DicyPGAolj/yk64/LdzQl3bcLFzvpSmsvtxfs+7to/rN0vcxkFg
         AgAA
     headers:
-      Connection:
-      - keep-alive
       Content-Length:
       - '288'
       Content-Type:
       - application/json; charset=utf-8
       Date:
-      - Sun, 29 Sep 2024 19:41:19 GMT
-      Server:
-      - Tengine
-      Set-Cookie:
-      - AWSALBTG=Z13EOmFxtta6WIREjKQwsa+fyTtOZsxSXtUWO+hNcU3ePNmGaVjwnRQ971x02PGevRQamZIiQtcuHmIudjw1pDjM/qAgPv5pitpX2hOtctwtExfBjAdM0PcHtU1OT2wAet8q2N4liHhs52xK6/dE/NZEKI/EEKLcn7QAt6HjuhTmfLWafq8=;
-        Expires=Sun, 06 Oct 2024 19:41:19 GMT; Path=/
-      - AWSALBTGCORS=Z13EOmFxtta6WIREjKQwsa+fyTtOZsxSXtUWO+hNcU3ePNmGaVjwnRQ971x02PGevRQamZIiQtcuHmIudjw1pDjM/qAgPv5pitpX2hOtctwtExfBjAdM0PcHtU1OT2wAet8q2N4liHhs52xK6/dE/NZEKI/EEKLcn7QAt6HjuhTmfLWafq8=;
-        Expires=Sun, 06 Oct 2024 19:41:19 GMT; Path=/; SameSite=None; Secure
-      - brw=brw24TxJhf720vlvx; path=/; expires=Mon, 29 Sep 2025 19:41:19 GMT; domain=.airtable.com;
-        samesite=none; secure
-      - brwConsent=opt-in; path=/; expires=Sun, 29 Sep 2024 19:46:19 GMT; domain=.airtable.com;
-        samesite=none; secure
-      Strict-Transport-Security:
-      - max-age=31536000; includeSubDomains; preload
-      Vary:
-      - Accept-Encoding
-      X-Content-Type-Options:
-      - nosniff
-      X-Frame-Options:
-      - DENY
-      access-control-allow-headers:
-      - authorization,content-length,content-type,user-agent,x-airtable-application-id,x-airtable-user-agent,x-api-version,x-requested-with
-      access-control-allow-methods:
-      - DELETE,GET,OPTIONS,PATCH,POST,PUT
-      access-control-allow-origin:
-      - '*'
-      airtable-datacenter-regions:
-      - us-east-1
-      airtable-uncompressed-content-length:
-      - '608'
+      - Wed, 09 Oct 2024 01:17:25 GMT
       content-encoding:
       - gzip
     status:
