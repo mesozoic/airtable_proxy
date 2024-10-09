@@ -1,5 +1,3 @@
-import os
-
 import pyairtable
 import pytest
 from pyairtable.utils import is_field_id
@@ -10,27 +8,8 @@ pytestmark = [pytest.mark.vcr()]
 
 
 @pytest.fixture
-def api():
-    return pyairtable.Api(os.environ["AIRTABLE_API_KEY"])
-
-
-@pytest.fixture
-def base_id():
-    return "appG3A7GCIJjrjf8j"
-
-
-@pytest.fixture
-def table_id():
-    return "tblH5kStARFR6wTwX"
-
-
-@pytest.fixture
-def base(api, base_id):
-    return api.base(base_id)
-
-
-@pytest.fixture
-def cache(tmp_path, api, base_id):
+def cache(tmp_path, api_key, base_id):
+    api = pyairtable.Api(api_key)
     cache = RecordCache(tmp_path, api)
     cache.reload_base(base_id)
     return cache

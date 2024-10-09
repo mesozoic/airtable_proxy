@@ -4,7 +4,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, Callable, Concatenate, ParamSpec, Self, TypeVar
+from typing import Any, Callable, Concatenate, Iterable, ParamSpec, Self, TypeVar
 
 import flask
 import pyairtable
@@ -21,7 +21,13 @@ class AppContext:
 
     @property
     def api_key(self) -> str:
-        return re.sub("^Bearer ", "", flask.request.headers["Authorization"])
+        """
+        Extracts the API key from the Authorization header of the current request.
+        """
+        auth_header = flask.request.headers.get("Authorization", "")
+        if match := re.match(r"^Bearer ([a-zA-Z0-9._-]+)$", auth_header):
+            return match.group(1)
+        raise flask.abort(403)
 
     @property
     def api(self) -> pyairtable.Api:
@@ -84,6 +90,7 @@ app.url_map.converters["app"] = AirtableIdConverter.for_prefix("app")
 app.url_map.converters["tbl"] = AirtableIdConverter.for_prefix("tbl")
 app.url_map.converters["rec"] = AirtableIdConverter.for_prefix("rec")
 
+
 # If any of these are in the request, we'll proxy it directly to Airtable.
 UNSUPPORTED_PARAMS = (
     "cellFormat",
@@ -99,8 +106,7 @@ UNSUPPORTED_PARAMS = (
 @app.route("/v0/meta/bases/<app:base_id>/tables")
 @uses_context
 def get_base_schema(ctx: AppContext, base_id: str) -> Any:
-    schema = get_cache_or_perform_request(ctx, f"meta/bases/{base_id}/tables")
-    return (200, json.dumps(schema))
+    return get_cache_or_perform_request(ctx, f"meta/bases/{base_id}/tables")
 
 
 @app.route("/v0/<app:base_id>/<tbl:table_id>")
@@ -111,22 +117,59 @@ def get_records(ctx: AppContext, base_id: str, table_id: str) -> Any:
 
     use_field_ids = bool(flask.request.args.get("returnFieldsByFieldId"))
     records = ctx.cache.get_records(base_id, table_id, use_field_ids=use_field_ids)
-    return (200, json.dumps(records))
+    return json_response(records)
 
 
-def get_cache_or_perform_request(ctx: AppContext, path: str) -> Any:
+@app.route("/v0/<app:base_id>/<tbl:table_id>/<rec:record_id>")
+@uses_context
+def get_record(ctx: AppContext, base_id: str, table_id: str, record_id: str) -> Any:
+    if any(param in flask.request.args for param in UNSUPPORTED_PARAMS):
+        return proxy_get_request(ctx.api.build_url(f"{base_id}/{table_id}/{record_id}"))
+
+    use_field_ids = bool(flask.request.args.get("returnFieldsByFieldId"))
+    record = ctx.cache.get_record(
+        base_id, table_id, record_id, use_field_ids=use_field_ids
+    )
+    return json_response(record)
+
+
+def get_cache_or_perform_request(ctx: AppContext, path: str) -> flask.Response:
+    """
+    Return the cached response for the given path, or perform the request and cache it.
+    """
+    cache_key = "@" + path
     try:
-        data = ctx.cache.persisted["@" + path]
+        data = ctx.cache.persisted[cache_key]
+        return json_response(data)
     except KeyError:
-        data = proxy_get_request(ctx.api.build_url(path))
-        ctx.cache.persisted.set(path, data)
-        return data
+        pass
+    url = ctx.api.build_url(path)
+    response = proxy_get_request(url)
+    response.raise_for_status()
+    ctx.cache.persisted.set(cache_key, response.json())
+    flask_response = flask.Response(response.content, status=response.status_code)
+    flask_response.headers.update(response.headers.items())
+    return flask_response
 
 
-def proxy_get_request(url: str) -> Any:
-    response = requests.get(
+def proxy_get_request(
+    url: str,
+    *,
+    pass_headers: Iterable[str] = {"authorization", "user-agent"},
+) -> requests.Response:
+    """
+    Perform a GET request, passing along the headers from the original request.
+    """
+    pass_headers = [header.lower() for header in pass_headers]
+    headers = {
+        k: v for (k, v) in flask.request.headers.items() if k.lower() in pass_headers
+    }
+    return requests.get(
         url,
         params=dict(flask.request.args.lists()),
-        headers=flask.request.headers,
+        headers=headers,
     )
-    return (response.status_code, response.content)
+
+
+def json_response(data: Any, status: int = 200) -> flask.Response:
+    return flask.Response(json.dumps(data), status=status, mimetype="application/json")
