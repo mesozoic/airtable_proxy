@@ -111,7 +111,9 @@ def get_base_schema(ctx: AppContext, base_id: str) -> Any:
 @app.route("/v0/<app:base_id>/<tbl:table_id>")
 @uses_context
 def get_records(ctx: AppContext, base_id: str, table_id: str) -> Any:
-    if any(param in flask.request.args for param in UNSUPPORTED_PARAMS):
+    if ctx.cache.disabled or any(
+        param in flask.request.args for param in UNSUPPORTED_PARAMS
+    ):
         return requests_to_flask(
             passthrough_get(ctx.api.build_url(f"{base_id}/{table_id}"))
         )
@@ -124,7 +126,9 @@ def get_records(ctx: AppContext, base_id: str, table_id: str) -> Any:
 @app.route("/v0/<app:base_id>/<tbl:table_id>/<rec:record_id>")
 @uses_context
 def get_record(ctx: AppContext, base_id: str, table_id: str, record_id: str) -> Any:
-    if any(param in flask.request.args for param in UNSUPPORTED_PARAMS):
+    if ctx.cache.disabled or any(
+        param in flask.request.args for param in UNSUPPORTED_PARAMS
+    ):
         return requests_to_flask(
             passthrough_get(ctx.api.build_url(f"{base_id}/{table_id}/{record_id}"))
         )
@@ -142,14 +146,14 @@ def get_cache_or_perform_request(ctx: AppContext, path: str) -> flask.Response:
     """
     cache_key = "@" + path
     try:
-        data = ctx.cache.persisted[cache_key]
+        data = ctx.cache[cache_key]
         return json_response(data)
     except KeyError:
         pass
     url = ctx.api.build_url(path)
     response = passthrough_get(url)
     response.raise_for_status()
-    ctx.cache.persisted.set(cache_key, response.json())
+    ctx.cache[cache_key] = response.json()
     return requests_to_flask(response)
 
 

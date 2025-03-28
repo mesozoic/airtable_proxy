@@ -5,8 +5,9 @@ Utilities for remembering and updating records in Airtable bases.
 from __future__ import annotations
 
 from collections import defaultdict
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterable, TypeAlias
+from typing import Any, Iterable, Iterator, Self, TypeAlias
 
 import diskcache  # type: ignore
 import pyairtable
@@ -47,6 +48,25 @@ class RecordCache:
             size_limit=size_limit,
             cull_limit=0,
         )
+        self.disabled = False
+
+    @contextmanager
+    def disable(self) -> Iterator[Self]:
+        prev = self.disabled
+        try:
+            yield self
+        finally:
+            self.disabled = prev
+
+    def __getitem__(self, key: str) -> Any:
+        if self.disabled:
+            raise KeyError(key)
+        return self.persisted[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if self.disabled:
+            return
+        self.persisted[key] = value
 
     def clear(self) -> None:
         """
@@ -119,31 +139,28 @@ class RecordCache:
         """
         Apply the changes in the given webhook payloads to the cache.
         """
-        raise NotImplementedError("definitely has bugs")
-
-        destroyed_tables: list[TableId] = []
-        destroyed_fields: dict[TableId, list[FieldId]] = defaultdict(list)
-        destroyed_records: dict[TableId, list[RecordId]] = defaultdict(list)
+        destroyed_tables: set[TableId] = set()
+        destroyed_fields: dict[TableId, set[FieldId]] = defaultdict(set)
+        destroyed_records: dict[TableId, set[RecordId]] = defaultdict(set)
         tables_with_renamed_fields: set[TableId] = set()
-        created_tables: list[TableId] = []
-        changed_tables: list[TableId] = []
-        changed_records: dict[TableId, list[RecordId]] = defaultdict(list)
+        created_tables: set[TableId] = set()
+        changed_tables: set[TableId] = set()
+        changed_records: dict[TableId, set[RecordId]] = defaultdict(set)
 
         # Load up a list of all the changes we need to make at once,
         # so we can perform them in fewer trips to the API.
         #
         # This is a tradeoff vs freshness of data, since we might spend
-        # a long time iterating through the list of payloads. We can
-        # reconsider this tradeoff at any point.
+        # a long time iterating through the list of payloads.
         #
         for payload in payloads:
-            created_tables.extend(payload.created_tables_by_id)
-            destroyed_tables.extend(payload.destroyed_table_ids)
-            changed_tables.extend(payload.changed_tables_by_id)
+            created_tables.update(payload.created_tables_by_id)
+            destroyed_tables.update(payload.destroyed_table_ids)
+            changed_tables.update(payload.changed_tables_by_id)
             for table_id, table_change in payload.changed_tables_by_id.items():
-                destroyed_fields[table_id].extend(table_change.destroyed_field_ids)
-                destroyed_records[table_id].extend(table_change.destroyed_record_ids)
-                changed_records[table_id].extend(table_change.changed_records_by_id)
+                destroyed_fields[table_id].update(table_change.destroyed_field_ids)
+                destroyed_records[table_id].update(table_change.destroyed_record_ids)
+                changed_records[table_id].update(table_change.changed_records_by_id)
                 for field_change in table_change.changed_fields_by_id.values():
                     if (
                         field_change.previous
@@ -152,29 +169,31 @@ class RecordCache:
                     ):
                         tables_with_renamed_fields.add(table_id)
 
-        for table_id in destroyed_tables:
-            self.remove_table(base_id, table_id)
+        # While we're reloading everything, don't return cached values.
+        with self.disable():
+            for table_id in destroyed_tables:
+                self.remove_table(base_id, table_id)
 
-        for table_id, record_ids in destroyed_records.items():
-            if table_id not in destroyed_tables:
-                self.remove_records(base_id, table_id, record_ids)
+            for table_id, record_ids in destroyed_records.items():
+                if table_id not in destroyed_tables:
+                    self.remove_records(base_id, table_id, record_ids)
 
-        for table_id, field_ids in destroyed_fields.items():
-            if table_id not in destroyed_tables:
-                self.remove_fields(base_id, table_id, field_ids)
+            for table_id, field_ids in destroyed_fields.items():
+                if table_id not in destroyed_tables:
+                    self.remove_fields(base_id, table_id, field_ids)
 
-        if destroyed_tables or created_tables or changed_tables:
-            self.reload_base_schema(base_id)
+            if destroyed_tables or created_tables or changed_tables:
+                self.reload_base_schema(base_id)
 
-        reload_tables = [*created_tables, *tables_with_renamed_fields]
-        for table_id in reload_tables:
-            if table_id not in destroyed_tables:
-                self.reload_table(base_id, table_id)
+            reload_tables = [*created_tables, *tables_with_renamed_fields]
+            for table_id in reload_tables:
+                if table_id not in destroyed_tables:
+                    self.reload_table(base_id, table_id)
 
-        for table_id, record_ids in changed_records.items():
-            if table_id in destroyed_tables or table_id in reload_tables:
-                continue
-            self.reload_records(base_id, table_id, record_ids)
+            for table_id, record_ids in changed_records.items():
+                if table_id in destroyed_tables or table_id in reload_tables:
+                    continue
+                self.reload_records(base_id, table_id, record_ids)
 
     def base_schema(self, base_id: str) -> BaseSchema:
         """
