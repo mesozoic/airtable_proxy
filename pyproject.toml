@@ -9,7 +9,7 @@ packages = [{include = "airtable_proxy"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-pyairtable = {git = "https://github.com/mesozoic/pyairtable", rev = "testing"}
+pyairtable = "3.0.2"
 flask = "^2.3.2"
 diskcache = "^5.6.1"
 
