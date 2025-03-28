@@ -174,7 +174,10 @@ class RecordCache:
         """
         Retrieve the schema for the given base from the cache.
         """
-        return BaseSchema(**self.persisted[Keys.schema(base_id)])
+        try:
+            return BaseSchema(**self.persisted[Keys.schema(base_id)])
+        except KeyError:
+            return self.reload_base_schema(base_id)
 
     def reload_base_schema(self, base_id: str) -> BaseSchema:
         """

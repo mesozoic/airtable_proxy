@@ -113,18 +113,22 @@ def get_base_schema(ctx: AppContext, base_id: str) -> Any:
 @uses_context
 def get_records(ctx: AppContext, base_id: str, table_id: str) -> Any:
     if any(param in flask.request.args for param in UNSUPPORTED_PARAMS):
-        return proxy_get_request(ctx.api.build_url(f"{base_id}/{table_id}"))
+        return requests_to_flask(
+            passthrough_get(ctx.api.build_url(f"{base_id}/{table_id}"))
+        )
 
     use_field_ids = bool(flask.request.args.get("returnFieldsByFieldId"))
     records = ctx.cache.get_records(base_id, table_id, use_field_ids=use_field_ids)
-    return json_response(records)
+    return json_response({"records": records})
 
 
 @app.route("/v0/<app:base_id>/<tbl:table_id>/<rec:record_id>")
 @uses_context
 def get_record(ctx: AppContext, base_id: str, table_id: str, record_id: str) -> Any:
     if any(param in flask.request.args for param in UNSUPPORTED_PARAMS):
-        return proxy_get_request(ctx.api.build_url(f"{base_id}/{table_id}/{record_id}"))
+        return requests_to_flask(
+            passthrough_get(ctx.api.build_url(f"{base_id}/{table_id}/{record_id}"))
+        )
 
     use_field_ids = bool(flask.request.args.get("returnFieldsByFieldId"))
     record = ctx.cache.get_record(
@@ -144,15 +148,14 @@ def get_cache_or_perform_request(ctx: AppContext, path: str) -> flask.Response:
     except KeyError:
         pass
     url = ctx.api.build_url(path)
-    response = proxy_get_request(url)
+    response = passthrough_get(url)
     response.raise_for_status()
     ctx.cache.persisted.set(cache_key, response.json())
-    flask_response = flask.Response(response.content, status=response.status_code)
-    flask_response.headers.update(response.headers.items())
-    return flask_response
+    return requests_to_flask(response)
 
 
-def proxy_get_request(
+def passthrough_request(
+    method: str,
     url: str,
     *,
     pass_headers: Iterable[str] = {"authorization", "user-agent"},
@@ -164,11 +167,26 @@ def proxy_get_request(
     headers = {
         k: v for (k, v) in flask.request.headers.items() if k.lower() in pass_headers
     }
-    return requests.get(
+    return requests.request(
+        method,
         url,
         params=dict(flask.request.args.lists()),
         headers=headers,
     )
+
+
+passthrough_get = functools.partial(passthrough_request, "GET")
+passthrough_post = functools.partial(passthrough_request, "POST")
+
+
+def requests_to_flask(value: requests.Response) -> flask.Response:
+    response = flask.Response(
+        value.content,
+        status=value.status_code,
+        mimetype=value.headers.get("Content-Type", "application/json"),
+    )
+    response.headers.update(value.headers.items())
+    return response
 
 
 def json_response(data: Any, status: int = 200) -> flask.Response:
