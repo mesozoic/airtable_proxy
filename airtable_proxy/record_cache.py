@@ -48,6 +48,12 @@ class RecordCache:
             cull_limit=0,
         )
 
+    def clear(self) -> None:
+        """
+        Clear the cache.
+        """
+        self.persisted.clear()
+
     def reload_base(self, base: str | pyairtable.Base) -> None:
         base_id = base.id if isinstance(base, pyairtable.Base) else base
         base_schema = self.reload_base_schema(base_id)

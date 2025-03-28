@@ -11,9 +11,20 @@ import airtable_proxy.app
 pytestmark = [pytest.mark.vcr]
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def app():
-    return airtable_proxy.app.app
+    app = airtable_proxy.app.app
+
+    # Clear the cache between each test.
+    try:
+        ctx = app.config[airtable_proxy.app.AIRTABLE_CONTEXT_KEY]
+    except KeyError:
+        pass
+    else:
+        for cache in ctx._caches.values():
+            cache.clear()
+
+    return app
 
 
 @pytest.fixture
@@ -35,6 +46,26 @@ def mock_schema(requests_mock, base_id):
 
 
 @pytest.fixture
+def mock_records(mock_schema, requests_mock, base_id, table_id):
+    records = [fake_record(Name=f"Record {n}") for n in range(5)]
+    requests_mock.get(
+        f"https://api.airtable.com/v0/{base_id}/{table_id}",
+        json={"records": records},
+    )
+    for record in records:
+        requests_mock.get(
+            f"https://api.airtable.com/v0/{base_id}/{table_id}/{record['id']}",
+            json=record,
+        )
+    return records
+
+
+@pytest.fixture
+def mock_record(mock_records):
+    return mock_records[0]
+
+
+@pytest.fixture
 def get(client, auth_headers):
     return functools.partial(client.get, headers=auth_headers)
 
@@ -44,15 +75,16 @@ def test_unauthorized(client, base_id):
     assert response.status_code == 403
 
 
-def test_get_records(requests_mock, mock_schema, get, base_id, table_id):
-    records = [fake_record() for _ in range(5)]
-    requests_mock.get(
-        f"https://api.airtable.com/v0/{base_id}/{table_id}?returnFieldsByFieldId=1",
-        json={"records": records},
-    )
+def test_get_records(mock_records, get, base_id, table_id):
     response = get(f"/v0/{base_id}/{table_id}")
     assert response.status_code == 200
-    assert response.json == {"records": records}
+    assert response.json == {"records": mock_records}
+
+
+def test_get_records__field_ids(mock_records, get, base_id, table_id):
+    response = get(f"/v0/{base_id}/{table_id}?returnFieldsByFieldId=1")
+    assert response.status_code == 200
+    assert response.json == {"records": [with_field_ids(r) for r in mock_records]}
 
 
 @mock.patch("airtable_proxy.record_cache.RecordCache.get_records")
@@ -80,6 +112,47 @@ def test_get_records__unsupported_params(
     assert response.status_code == 200
     assert response.json == {"records": records}
     assert mock_get_records.call_count == 0
+
+
+def test_get_record(mock_record, get, base_id, table_id):
+    response = get(f"/v0/{base_id}/{table_id}/{mock_record['id']}")
+    assert response.status_code == 200
+    assert response.json == mock_record
+
+
+def test_get_record__field_ids(mock_record, get, base_id, table_id):
+    response = get(
+        f"/v0/{base_id}/{table_id}/{mock_record['id']}?returnFieldsByFieldId=1"
+    )
+    assert response.status_code == 200
+    assert response.json == with_field_ids(mock_record)
+
+
+@mock.patch("airtable_proxy.record_cache.RecordCache.get_record")
+@pytest.mark.parametrize(
+    "param",
+    (
+        "cellFormat",
+        "filterByFormula",
+        "maxRecords",
+        "offset",
+        "recordMetadata",
+        "sort",
+        "view",
+    ),
+)
+def test_get_record__unsupported_params(
+    mock_get_record, requests_mock, get, base_id, table_id, param
+):
+    record = fake_record(Name="Test")
+    requests_mock.get(
+        f"https://api.airtable.com/v0/{base_id}/{table_id}/{record['id']}?{param}=1",
+        json=record,
+    )
+    response = get(f"/v0/{base_id}/{table_id}/{record['id']}?{param}=1")
+    assert response.status_code == 200
+    assert response.json == record
+    assert mock_get_record.call_count == 0
 
 
 def test_schema(get, base_id, table_id):
@@ -156,3 +229,13 @@ SCHEMA = {
         }
     ]
 }
+
+
+def with_field_ids(record):
+    field_id_by_name = {
+        field["name"]: field["id"] for field in SCHEMA["tables"][0]["fields"]
+    }
+    field_values = {
+        field_id_by_name[key]: val for (key, val) in record["fields"].items()
+    }
+    return dict(record, fields=field_values)

@@ -43,7 +43,7 @@ class AppContext:
     @property
     def cache_location(self) -> Path:
         """
-        Generates a unique location for the disk cache for the request's API key.
+        Generates a unique location for the disk cache for the current request's API key.
         """
         base = Path(os.environ["AIRTABLE_CACHE_DIR"])
         return base / hashlib.sha256(self.api_key.encode()).hexdigest()
@@ -60,17 +60,16 @@ class AppContext:
 
 P = ParamSpec("P")
 T = TypeVar("T")
+AIRTABLE_CONTEXT_KEY = "AIRTABLE_PROXY_CONTEXT"
 
 
 def uses_context(callable: Callable[Concatenate[AppContext, P], T]) -> Callable[P, T]:
-    key = "AIRTABLE_PROXY_CONTEXT"
-
     @functools.wraps(callable)
     def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         try:
-            ctx = flask.current_app.config[key]
+            ctx = flask.current_app.config[AIRTABLE_CONTEXT_KEY]
         except Exception:
-            ctx = flask.current_app.config[key] = AppContext()
+            ctx = flask.current_app.config[AIRTABLE_CONTEXT_KEY] = AppContext()
         return callable(ctx, *args, **kwargs)
 
     return _wrapper
