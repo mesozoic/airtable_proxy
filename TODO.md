@@ -26,10 +26,10 @@
             - [ ] If successful, store hash and allow access
             - [ ] If not successful, return 403
 
-- [ ] Local storage for records (start with sqlite3)
-    - [ ] store records with unique key of `(appId, baseId, tableId, recordId)`
-    - [ ] store field values by field ID, not field name
-    - [ ] store table metadata, including field names
+- [x] Local storage for records (start with sqlite3)
+    - [x] store records with unique key of `(baseId, tableId, recordId)`
+    - [x] store field values by field ID, not field name
+    - [x] store table metadata, including field names
 
 - [ ] "Refresh tables" background job
     - [ ] Pause "refresh webhook payloads" background job for this base
