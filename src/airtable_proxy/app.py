@@ -61,9 +61,7 @@ def create_app(config: dict | Config, storage_path: Path | str | None = None) ->
           independently. This could cause duplicate webhook creation attempts
           (Airtable deduplicates by callback URL) and concurrent refresh_tables
           calls writing to the same storage.
-        - Storage uses shelve, which is not thread-safe. Running with multiple
-          workers or threads will cause errors. Use a single worker for now,
-          or switch to a thread-safe storage backend.
+        - Storage uses sqlite3, which handles concurrent access safely.
         """
         storage = Storage(storage_path)
         persistence = AirtablePersistence(storage)
@@ -85,9 +83,10 @@ def create_app(config: dict | Config, storage_path: Path | str | None = None) ->
                 persistence.save_webhook(base_id, webhook_id=webhook.id, cursor=0)
                 refresh_tables(base, base_id, persistence)
 
-        yield
-
-        storage.close()
+        try:
+            yield
+        finally:
+            storage.close()
 
     app = FastAPI(lifespan=lifespan)
 

@@ -69,9 +69,6 @@
     - [ ] proxy to Airtable if `cellFormat=string`
     - [ ] proxy to Airtable if record is missing from local storage
 
-## 2.0
+## 1.0
 
-- [ ] Configurable backends for
-    - [ ] Redis
-    - [ ] Memcache
-    - [ ] Postgres
+- [ ] Switch to use Celery or RQ for background tasks
