@@ -6,16 +6,16 @@
 - [x] On server startup:
     - [x] read a configuration file with connection info and list of bases
     - [x] test the connection to Airtable; exit if unavailable
-    - [ ] for each base, check local storage for a webhook ID
-        - [ ] if none is recorded, look for an existing webhook
-        - [ ] use our callback URL to identify *our* webhook
+    - [x] for each base, check local storage for a webhook ID
+        - [x] if none is recorded, look for an existing webhook
+        - [x] use our callback URL to identify *our* webhook
     - [ ] If a webhook exists:
         - [ ] load records from local storage into memory
         - [ ] read the webhook cursor number from local storage
         - [ ] enqueue a "fetch webhook payloads" background job
-    - [ ] If no webhook exists:
-        - [ ] create a webhook with identifying callback URL
-        - [ ] save webhook ID and cursor number into local storage
+    - [x] If no webhook exists:
+        - [x] create a webhook with identifying callback URL
+        - [x] save webhook ID and cursor number into local storage
         - [ ] enqueue "refresh tables" background job
 
 - [ ] Authentication

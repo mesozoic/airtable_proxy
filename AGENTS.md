@@ -3,6 +3,12 @@
 - Read all project information and contributor guidelines in @README.md
 - Maintain the project todo list in @TODO.md
 - Try to infer idioms and patterns from existing code.
+- Update this file with notes as you learn about the team's preferred style.
+- Do not give yourself credit in commit messages.
+
+# Application structure
+
+- Avoid overcomplication or YAGNI layers of abstraction.
 
 # Testing best practices
 
@@ -13,3 +19,4 @@
 - Use outside-in test driven development.
 - Follow red-green-refactor. Don't clean up code before it works.
 - Do not use type annotations in test files. It's not necessary.
+- Use `@patch` decorator instead of wrapping entire tests in `with patch(...)`
