@@ -1,6 +1,7 @@
+import click
 from pyairtable import Api
 
-from airtable_proxy.config import Config, load_config
+from airtable_proxy.config import Config, load_config, load_config_from_file
 from airtable_proxy.persistence import AirtablePersistence
 from airtable_proxy.storage import Storage
 
@@ -40,7 +41,7 @@ def initialize(config: dict | Config) -> None:
     """
     Initialize webhooks and fetch initial data for all configured bases.
 
-    Run this once before starting the web server.
+    Run this once before polling for updates.
     """
     if isinstance(config, dict):
         config = load_config(config)
@@ -49,38 +50,32 @@ def initialize(config: dict | Config) -> None:
     storage = Storage(config.storage.sqlite)
     persistence = AirtablePersistence(storage)
 
-    try:
-        for base_id, base_config in config.bases.items():
-            api = Api(base_config.api_key)
-            api.whoami()  # Raises if connection fails
+    for base_id, base_config in config.bases.items():
+        api = Api(base_config.api_key)
+        api.whoami()  # Raises if connection fails
 
-            base = api.base(base_id)
-            webhook_info = persistence.get_webhook(base_id)
+        base = api.base(base_id)
+        webhook_info = persistence.get_webhook(base_id)
 
-            if webhook_info:
-                # Existing webhook - will poll for updates
-                pass
-            else:
-                # Find or create webhook
-                callback_url = f"https://{config.hostname}/webhooks/{base_id}"
-                webhook = find_or_create_webhook(base, callback_url)
-                persistence.save_webhook(base_id, webhook_id=webhook.id, cursor=0)
-                refresh_tables(base, base_id, persistence)
-    finally:
-        storage.close()
+        if webhook_info:
+            # Existing webhook - will poll for updates
+            pass
+        else:
+            # Find or create webhook
+            callback_url = f"https://{config.hostname}/webhooks/{base_id}"
+            webhook = find_or_create_webhook(base, callback_url)
+            persistence.save_webhook(base_id, webhook_id=webhook.id, cursor=0)
+            refresh_tables(base, base_id, persistence)
 
 
-def main() -> None:
-    import argparse
-
-    from airtable_proxy.config import load_config_from_file
-
-    parser = argparse.ArgumentParser(description="Initialize and poll Airtable webhooks")
-    parser.add_argument("config", help="Path to configuration file")
-    args = parser.parse_args()
-
-    config = load_config_from_file(args.config)
-    initialize(config)
+@click.command()
+@click.argument("config", type=click.Path(exists=True))
+def main(config: str) -> None:
+    """
+    Initialize and poll Airtable webhooks.
+    """
+    cfg = load_config_from_file(config)
+    initialize(cfg)
 
 
 if __name__ == "__main__":

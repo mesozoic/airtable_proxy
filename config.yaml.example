@@ -1,0 +1,6 @@
+hostname: airtable-proxy.your.domain.name
+storage:
+    sqlite: data/airtable_proxy.db
+bases:
+    appCRvRn3LxhzqYUZ:
+        api_key: env(AIRTABLE_PROXY_API_KEY)

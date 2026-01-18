@@ -3,20 +3,20 @@
 ## MVP
 
 - [x] Launch an ASGI server
-- [x] On server startup:
+- [x] On poller startup:
     - [x] read a configuration file with connection info and list of bases
     - [x] test the connection to Airtable; exit if unavailable
     - [x] for each base, check local storage for a webhook ID
         - [x] if none is recorded, look for an existing webhook
         - [x] use our callback URL to identify *our* webhook
-    - [ ] If a webhook exists:
-        - [ ] load records from local storage into memory
-        - [ ] read the webhook cursor number from local storage
-        - [ ] enqueue a "fetch webhook payloads" background job
     - [x] If no webhook exists:
         - [x] create a webhook with identifying callback URL
         - [x] save webhook ID and cursor number into local storage
         - [x] fetch all tables and records
+    - [ ] If a webhook exists:
+        - [ ] read the webhook cursor number from local storage
+        - [ ] trigger the "read webhook payloads" job
+        - [ ] re-run the job every 1s after it completes
 
 - [ ] Authentication
     - [ ] Use the api_key in the configuration to retrieve records
@@ -31,15 +31,7 @@
     - [x] store field values by field ID, not field name
     - [x] store table metadata, including field names
 
-- [ ] "Refresh tables" background job
-    - [ ] Pause "refresh webhook payloads" background job for this base
-    - [ ] Update the locally stored cursor value for the webhook
-    - [ ] Request all records from each table
-    - [ ] Enqueue "refresh webhook payloads" background job
-
-- [ ] "Refresh webhook payloads" background job
-    - [ ] Poll for webhook payloads every 1s
-        - [ ] Do this by triggering itself after it's done running
+- [ ] "Read webhook payloads" job
     - [ ] Retrieve payloads and store for async processing
     - [ ] Process webhook payloads in order, in the background
     - [ ] Need to support webhook payloads that:
@@ -50,6 +42,8 @@
         - [ ] create a record
         - [ ] change a record's field values
         - [ ] destroy a record
+    - [ ] Need to ensure every operation above is idempotent wrt local storage
+    - [ ] Only update the local cursor value once a payload is processed
 
 - [ ] Support [list records](https://airtable.com/developers/web/api/list-records)
     - [ ] implement `maxRecords`
@@ -69,6 +63,12 @@
     - [ ] proxy to Airtable if `cellFormat=string`
     - [ ] proxy to Airtable if record is missing from local storage
 
+## 0.2
+
+- [ ] Make the polling interval configurable
+
 ## 1.0
 
+- [ ] Allow disabling polling interval in the configuration
+    - This means we _only_ refresh payloads when we receive a notification
 - [ ] Switch to use Celery or RQ for background tasks
