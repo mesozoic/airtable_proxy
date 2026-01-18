@@ -24,16 +24,21 @@ class BaseConfig(BaseModel):
         return result
 
 
+class StorageConfig(BaseModel):
+    sqlite: Path = Path("data/airtable_proxy.db")
+
+
 class Config(BaseModel):
     hostname: str
     bases: dict[str, BaseConfig]
+    storage: StorageConfig = StorageConfig()
 
 
 def load_config(data: dict) -> Config:
     return Config.model_validate(data)
 
 
-def load_config_from_file(path: Path) -> Config:
+def load_config_from_file(path: Path | str) -> Config:
     with open(path) as f:
         data = yaml.safe_load(f)
     return load_config(data)

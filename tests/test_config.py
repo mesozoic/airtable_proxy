@@ -3,11 +3,11 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from airtable_proxy.config import load_config, load_config_from_file
+from airtable_proxy import config
 
 
 def test_load_valid_config():
-    config = load_config(
+    cfg = config.load_config(
         {
             "hostname": "airtable-proxy.example.com",
             "bases": {
@@ -17,15 +17,15 @@ def test_load_valid_config():
         }
     )
 
-    assert config.hostname == "airtable-proxy.example.com"
-    assert len(config.bases) == 2
-    assert config.bases["appCRvRn3LxhzqYUZ"].api_key == "patCRvRn3LxhzqYUZ.secret"
-    assert config.bases["appAnotherBase123"].api_key == "patAnotherKey456.secret"
+    assert cfg.hostname == "airtable-proxy.example.com"
+    assert len(cfg.bases) == 2
+    assert cfg.bases["appCRvRn3LxhzqYUZ"].api_key == "patCRvRn3LxhzqYUZ.secret"
+    assert cfg.bases["appAnotherBase123"].api_key == "patAnotherKey456.secret"
 
 
 def test_load_config_missing_hostname():
     with pytest.raises(ValidationError) as exc_info:
-        load_config(
+        config.load_config(
             {
                 "bases": {"appCRvRn3LxhzqYUZ": {"api_key": "patCRvRn3LxhzqYUZ.secret"}},
             }
@@ -35,47 +35,47 @@ def test_load_config_missing_hostname():
 
 def test_load_config_missing_bases():
     with pytest.raises(ValidationError) as exc_info:
-        load_config({"hostname": "airtable-proxy.example.com"})
+        config.load_config({"hostname": "airtable-proxy.example.com"})
     assert "bases" in str(exc_info.value)
 
 
 def test_load_config_api_key_from_default_env(monkeypatch):
     monkeypatch.setenv("AIRTABLE_API_KEY", "patFromEnv.secret")
-    config = load_config(
+    cfg = config.load_config(
         {
             "hostname": "airtable-proxy.example.com",
             "bases": {"appCRvRn3LxhzqYUZ": {}},
         }
     )
-    assert config.bases["appCRvRn3LxhzqYUZ"].api_key == "patFromEnv.secret"
+    assert cfg.bases["appCRvRn3LxhzqYUZ"].api_key == "patFromEnv.secret"
 
 
 def test_load_config_api_key_env_keyword(monkeypatch):
     monkeypatch.setenv("AIRTABLE_API_KEY", "patFromEnv.secret")
-    config = load_config(
+    cfg = config.load_config(
         {
             "hostname": "airtable-proxy.example.com",
             "bases": {"appCRvRn3LxhzqYUZ": {"api_key": "env"}},
         }
     )
-    assert config.bases["appCRvRn3LxhzqYUZ"].api_key == "patFromEnv.secret"
+    assert cfg.bases["appCRvRn3LxhzqYUZ"].api_key == "patFromEnv.secret"
 
 
 def test_load_config_api_key_env_custom_var(monkeypatch):
     monkeypatch.setenv("MY_CUSTOM_KEY", "patCustom.secret")
-    config = load_config(
+    cfg = config.load_config(
         {
             "hostname": "airtable-proxy.example.com",
             "bases": {"appCRvRn3LxhzqYUZ": {"api_key": "env(MY_CUSTOM_KEY)"}},
         }
     )
-    assert config.bases["appCRvRn3LxhzqYUZ"].api_key == "patCustom.secret"
+    assert cfg.bases["appCRvRn3LxhzqYUZ"].api_key == "patCustom.secret"
 
 
 def test_load_config_api_key_env_not_set(monkeypatch):
     monkeypatch.delenv("AIRTABLE_API_KEY", raising=False)
     with pytest.raises(ValidationError) as exc_info:
-        load_config(
+        config.load_config(
             {
                 "hostname": "airtable-proxy.example.com",
                 "bases": {"appCRvRn3LxhzqYUZ": {}},
@@ -94,7 +94,7 @@ bases:
         api_key: patCRvRn3LxhzqYUZ.secret
 """
     )
-    config = load_config_from_file(config_file)
+    cfg = config.load_config_from_file(config_file)
 
-    assert config.hostname == "airtable-proxy.example.com"
-    assert config.bases["appCRvRn3LxhzqYUZ"].api_key == "patCRvRn3LxhzqYUZ.secret"
+    assert cfg.hostname == "airtable-proxy.example.com"
+    assert cfg.bases["appCRvRn3LxhzqYUZ"].api_key == "patCRvRn3LxhzqYUZ.secret"

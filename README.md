@@ -12,11 +12,26 @@ This library relies on:
 
 ## Getting started
 
-Create a configuration file that looks like this:
+Create a configuration file (`config.yaml`):
 
 ```yaml
 hostname: airtable-proxy.yourcompany.com
+storage:
+    sqlite: data/airtable_proxy.db
 bases:
     appCRvRn3LxhzqYUZ:
         api_key: patCRvRn3LxhzqYUZ.s3Lxh...
+```
+
+You need to run an instance of the poller to fetch data into the database:
+
+```bash
+python -m airtable_proxy.poller $PWD/config.yaml
+```
+
+You can use uvicorn to run instances of the web server to serve data:
+
+```bash
+export AIRTABLE_PROXY_CONFIG=$PWD/config.yaml
+uvicorn airtable_proxy.app:create_app --factory
 ```
