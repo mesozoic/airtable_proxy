@@ -2,10 +2,10 @@
 
 ## MVP
 
-- [ ] Launch an ASGI server
-- [ ] On server startup:
+- [x] Launch an ASGI server
+- [x] On server startup:
     - [x] read a configuration file with connection info and list of bases
-    - [ ] test the connection to Airtable; exit if unavailable
+    - [x] test the connection to Airtable; exit if unavailable
     - [ ] for each base, check local storage for a webhook ID
         - [ ] if none is recorded, look for an existing webhook
         - [ ] use our callback URL to identify *our* webhook

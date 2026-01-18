@@ -9,10 +9,13 @@ packages = [{include = "airtable_proxy", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.13"
+fastapi = "^0.115"
 pyairtable = "^3.0.2"
 pyyaml = "^6.0"
+uvicorn = {extras = ["standard"], version = "^0.34"}
 
 [tool.poetry.group.dev.dependencies]
+httpx = "^0.28"
 mypy = "^1.19.1"
 pytest = "^7.4.4"
 pytest-cov = "^6.3.0"

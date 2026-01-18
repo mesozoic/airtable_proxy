@@ -2,6 +2,7 @@
 
 - Read all project information and contributor guidelines in @README.md
 - Maintain the project todo list in @TODO.md
+- Try to infer idioms and patterns from existing code.
 
 # Testing best practices
 
