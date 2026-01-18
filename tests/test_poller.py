@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from airtable_proxy import persistence, poller, storage
+from airtable_proxy.persistence import RecordInfo, TableInfo
 
 
 @pytest.fixture
@@ -111,22 +112,22 @@ def test_refresh_tables_saves_tables_and_records(tmp_path):
     poller.refresh_tables(mock_base, "appBase1", persist)
 
     # Verify tables were saved
-    assert persist.get_table("appBase1", "tbl1") == {"table_name": "Table One"}
-    assert persist.get_table("appBase1", "tbl2") == {"table_name": "Table Two"}
+    assert persist.get_table("appBase1", "tbl1") == TableInfo(table_name="Table One")
+    assert persist.get_table("appBase1", "tbl2") == TableInfo(table_name="Table Two")
 
     # Verify records were saved
-    assert persist.get_record("appBase1", "tbl1", "rec1") == {
-        "fields": {"fldA": "value1"},
-        "created_time": "2024-01-01T00:00:00.000Z",
-    }
-    assert persist.get_record("appBase1", "tbl1", "rec2") == {
-        "fields": {"fldA": "value2"},
-        "created_time": "2024-01-02T00:00:00.000Z",
-    }
-    assert persist.get_record("appBase1", "tbl2", "rec3") == {
-        "fields": {"fldB": "value3"},
-        "created_time": "2024-01-03T00:00:00.000Z",
-    }
+    assert persist.get_record("appBase1", "tbl1", "rec1") == RecordInfo(
+        fields={"fldA": "value1"},
+        created_time="2024-01-01T00:00:00.000Z",
+    )
+    assert persist.get_record("appBase1", "tbl1", "rec2") == RecordInfo(
+        fields={"fldA": "value2"},
+        created_time="2024-01-02T00:00:00.000Z",
+    )
+    assert persist.get_record("appBase1", "tbl2", "rec3") == RecordInfo(
+        fields={"fldB": "value3"},
+        created_time="2024-01-03T00:00:00.000Z",
+    )
 
     # Verify table.all was called with return_fields_by_field_id=True
     mock_base.table.return_value.all.assert_called_with(return_fields_by_field_id=True)

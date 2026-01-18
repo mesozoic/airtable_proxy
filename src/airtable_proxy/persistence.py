@@ -1,26 +1,42 @@
 from typing import Any
 
+from pydantic import BaseModel
+
 from airtable_proxy.storage import Storage
 
 
-def _webhook_key(base_id: str) -> str:
-    return f"webhook:{base_id}"
+class WebhookInfo(BaseModel):
+    webhook_id: str
+    cursor: int
+
+    @staticmethod
+    def key(base_id: str) -> str:
+        return f"webhook:{base_id}"
 
 
-def _table_key(base_id: str, table_id: str) -> str:
-    return _table_prefix(base_id) + table_id
+class TableInfo(BaseModel):
+    table_name: str
+
+    @staticmethod
+    def key(base_id: str, table_id: str) -> str:
+        return TableInfo.prefix(base_id) + table_id
+
+    @staticmethod
+    def prefix(base_id: str) -> str:
+        return f"table:{base_id}:"
 
 
-def _table_prefix(base_id: str) -> str:
-    return f"table:{base_id}:"
+class RecordInfo(BaseModel):
+    fields: dict[str, Any]
+    created_time: str
 
+    @staticmethod
+    def key(base_id: str, table_id: str, record_id: str) -> str:
+        return RecordInfo.prefix(base_id, table_id) + record_id
 
-def _record_key(base_id: str, table_id: str, record_id: str) -> str:
-    return f"record:{base_id}:{table_id}:{record_id}"
-
-
-def _record_prefix(base_id: str, table_id: str) -> str:
-    return f"record:{base_id}:{table_id}:"
+    @staticmethod
+    def prefix(base_id: str, table_id: str) -> str:
+        return f"record:{base_id}:{table_id}:"
 
 
 class AirtablePersistence:
@@ -29,43 +45,55 @@ class AirtablePersistence:
 
     # Webhook methods
 
-    def get_webhook(self, base_id: str) -> dict[str, Any] | None:
-        return self._storage.get(_webhook_key(base_id))
+    def get_webhook(self, base_id: str) -> WebhookInfo | None:
+        data = self._storage.get(WebhookInfo.key(base_id))
+        return WebhookInfo.model_validate(data) if data else None
 
     def save_webhook(self, base_id: str, webhook_id: str, cursor: int) -> None:
-        self._storage.set(_webhook_key(base_id), {"webhook_id": webhook_id, "cursor": cursor})
+        self._storage.set(
+            WebhookInfo.key(base_id), WebhookInfo(webhook_id=webhook_id, cursor=cursor).model_dump()
+        )
 
     # Table methods
 
-    def get_table(self, base_id: str, table_id: str) -> dict[str, Any] | None:
-        return self._storage.get(_table_key(base_id, table_id))
+    def get_table(self, base_id: str, table_id: str) -> TableInfo | None:
+        data = self._storage.get(TableInfo.key(base_id, table_id))
+        return TableInfo.model_validate(data) if data else None
 
     def save_table(self, base_id: str, table_id: str, table_name: str) -> None:
-        self._storage.set(_table_key(base_id, table_id), {"table_name": table_name})
+        self._storage.set(
+            TableInfo.key(base_id, table_id), TableInfo(table_name=table_name).model_dump()
+        )
 
-    def get_tables(self, base_id: str) -> dict[str, dict[str, Any]]:
-        prefix = _table_prefix(base_id)
+    def get_tables(self, base_id: str) -> dict[str, TableInfo]:
+        prefix = TableInfo.prefix(base_id)
         result = {}
         for key in self._storage.keys(prefix):
             table_id = key[len(prefix) :]
-            result[table_id] = self._storage.get(key)
+            data = self._storage.get(key)
+            result[table_id] = TableInfo.model_validate(data)
         return result
 
     # Record methods
 
-    def get_record(self, base_id: str, table_id: str, record_id: str) -> dict[str, Any] | None:
-        return self._storage.get(_record_key(base_id, table_id, record_id))
+    def get_record(self, base_id: str, table_id: str, record_id: str) -> RecordInfo | None:
+        data = self._storage.get(RecordInfo.key(base_id, table_id, record_id))
+        return RecordInfo.model_validate(data) if data else None
 
-    def save_record(self, base_id: str, table_id: str, record_id: str, fields: dict[str, Any], created_time: str) -> None:
-        self._storage.set(_record_key(base_id, table_id, record_id), {"fields": fields, "created_time": created_time})
+    def save_record(
+        self, base_id: str, table_id: str, record_id: str, fields: dict[str, Any], created_time: str
+    ) -> None:
+        key = RecordInfo.key(base_id, table_id, record_id)
+        self._storage.set(key, RecordInfo(fields=fields, created_time=created_time).model_dump())
 
     def delete_record(self, base_id: str, table_id: str, record_id: str) -> None:
-        self._storage.delete(_record_key(base_id, table_id, record_id))
+        self._storage.delete(RecordInfo.key(base_id, table_id, record_id))
 
-    def get_records(self, base_id: str, table_id: str) -> dict[str, dict[str, Any]]:
-        prefix = _record_prefix(base_id, table_id)
+    def get_records(self, base_id: str, table_id: str) -> dict[str, RecordInfo]:
+        prefix = RecordInfo.prefix(base_id, table_id)
         result = {}
         for key in self._storage.keys(prefix):
             record_id = key[len(prefix) :]
-            result[record_id] = self._storage.get(key)
+            data = self._storage.get(key)
+            result[record_id] = RecordInfo.model_validate(data)
         return result

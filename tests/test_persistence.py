@@ -1,6 +1,7 @@
 import pytest
 
 from airtable_proxy import persistence, storage
+from airtable_proxy.persistence import RecordInfo, TableInfo, WebhookInfo
 
 
 @pytest.fixture
@@ -19,13 +20,13 @@ def test_get_webhook_returns_none_when_missing(persist):
 def test_save_and_get_webhook(persist):
     persist.save_webhook("appBase1", webhook_id="wh123", cursor=42)
     webhook = persist.get_webhook("appBase1")
-    assert webhook == {"webhook_id": "wh123", "cursor": 42}
+    assert webhook == WebhookInfo(webhook_id="wh123", cursor=42)
 
 
 def test_save_webhook_updates_existing(persist):
     persist.save_webhook("appBase1", webhook_id="wh123", cursor=1)
     persist.save_webhook("appBase1", webhook_id="wh123", cursor=99)
-    assert persist.get_webhook("appBase1")["cursor"] == 99
+    assert persist.get_webhook("appBase1").cursor == 99
 
 
 # Table tests
@@ -38,7 +39,7 @@ def test_get_table_returns_none_when_missing(persist):
 def test_save_and_get_table(persist):
     persist.save_table("appBase1", "tbl123", table_name="My Table")
     table = persist.get_table("appBase1", "tbl123")
-    assert table == {"table_name": "My Table"}
+    assert table == TableInfo(table_name="My Table")
 
 
 def test_get_tables_for_base(persist):
@@ -59,10 +60,16 @@ def test_get_record_returns_none_when_missing(persist):
 
 def test_save_and_get_record(persist):
     persist.save_record(
-        "appBase1", "tbl1", "rec123", fields={"fld1": "value1", "fld2": 42}, created_time="2024-01-01T00:00:00.000Z"
+        "appBase1",
+        "tbl1",
+        "rec123",
+        fields={"fld1": "value1", "fld2": 42},
+        created_time="2024-01-01T00:00:00.000Z",
     )
     record = persist.get_record("appBase1", "tbl1", "rec123")
-    assert record == {"fields": {"fld1": "value1", "fld2": 42}, "created_time": "2024-01-01T00:00:00.000Z"}
+    assert record == RecordInfo(
+        fields={"fld1": "value1", "fld2": 42}, created_time="2024-01-01T00:00:00.000Z"
+    )
 
 
 def test_delete_record(persist):
