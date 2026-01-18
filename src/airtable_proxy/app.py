@@ -49,6 +49,22 @@ def create_app(config: dict | Config, storage_path: Path | str | None = None) ->
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        """
+        Manage application startup and shutdown.
+
+        Code before `yield` runs once when the server starts, before accepting
+        requests. Code after `yield` runs once during graceful shutdown.
+        See: https://fastapi.tiangolo.com/advanced/events/#lifespan
+
+        Concurrency notes:
+        - With multiple workers (uvicorn --workers), each worker runs lifespan
+          independently. This could cause duplicate webhook creation attempts
+          (Airtable deduplicates by callback URL) and concurrent refresh_tables
+          calls writing to the same storage.
+        - Storage uses shelve, which is not thread-safe. Running with multiple
+          workers or threads will cause errors. Use a single worker for now,
+          or switch to a thread-safe storage backend.
+        """
         storage = Storage(storage_path)
         persistence = AirtablePersistence(storage)
 
