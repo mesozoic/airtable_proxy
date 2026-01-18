@@ -5,11 +5,12 @@ description = ""
 authors = ["Alex Levy <mesozoic@users.noreply.github.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "airtable_proxy"}]
+packages = [{include = "airtable_proxy", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.13"
 pyairtable = "^3.0.2"
+pyyaml = "^6.0"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.19.1"
@@ -17,7 +18,15 @@ pytest = "^7.4.4"
 pytest-cov = "^6.3.0"
 pytest-vcr = "^1.0.2"
 requests-mock = "^1.12.1"
+types-pyyaml = "^6.0"
 types-requests = "^2.32.4.20260107"
+ruff = "^0.9"
+
+[tool.ruff]
+line-length = 131
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
 
 [build-system]
 requires = ["poetry-core"]
