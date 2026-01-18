@@ -16,7 +16,7 @@
     - [x] If no webhook exists:
         - [x] create a webhook with identifying callback URL
         - [x] save webhook ID and cursor number into local storage
-        - [ ] enqueue "refresh tables" background job
+        - [x] fetch all tables and records
 
 - [ ] Authentication
     - [ ] Use the api_key in the configuration to retrieve records

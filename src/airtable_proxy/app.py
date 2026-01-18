@@ -21,6 +21,25 @@ def find_or_create_webhook(base, callback_url: str):
     return base.webhook(response.id)
 
 
+def refresh_tables(base, base_id: str, persistence: AirtablePersistence) -> None:
+    """Fetch all tables and records from a base and store them."""
+    schema = base.schema()
+    for table_info in schema.tables:
+        table_id = table_info.id
+        table_name = table_info.name
+        persistence.save_table(base_id, table_id, table_name)
+
+        table = base.table(table_id)
+        for record in table.all(return_fields_by_field_id=True):
+            persistence.save_record(
+                base_id,
+                table_id,
+                record["id"],
+                fields=record["fields"],
+                created_time=record["createdTime"],
+            )
+
+
 def create_app(config: dict | Config, storage_path: Path | str | None = None) -> FastAPI:
     if isinstance(config, dict):
         config = load_config(config)
@@ -48,7 +67,7 @@ def create_app(config: dict | Config, storage_path: Path | str | None = None) ->
                 callback_url = f"https://{config.hostname}/webhooks/{base_id}"
                 webhook = find_or_create_webhook(base, callback_url)
                 persistence.save_webhook(base_id, webhook_id=webhook.id, cursor=0)
-                # TODO: fetch all records
+                refresh_tables(base, base_id, persistence)
 
         yield
 
