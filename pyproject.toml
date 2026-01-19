@@ -13,6 +13,7 @@ fastapi = "^0.115"
 pyairtable = "^3.0.2"
 pyyaml = "^6.0"
 uvicorn = {extras = ["standard"], version = "^0.34"}
+httpx = "^0.28"
 
 [tool.poetry.group.dev.dependencies]
 httpx = "^0.28"

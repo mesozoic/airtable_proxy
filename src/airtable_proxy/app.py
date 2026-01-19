@@ -3,10 +3,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 
 from airtable_proxy.config import Config, load_config_from_file
 from airtable_proxy.persistence import AirtablePersistence
+from airtable_proxy.proxy import ProxyRequest, proxy_to_airtable
 from airtable_proxy.storage import Storage
 
 
@@ -40,5 +41,20 @@ def create_app(config: Config | None = None) -> FastAPI:
     @app.get("/health")
     def health() -> dict[str, Any]:
         return {"status": "ok"}
+
+    @app.exception_handler(ProxyRequest)
+    async def handle_proxy_request(request: Request, _exc: ProxyRequest) -> Response:
+        """
+        When a route handler raises ProxyRequest, forward the request to Airtable.
+        """
+        path = request.url.path.lstrip("/")
+        return await proxy_to_airtable(request, path)
+
+    @app.api_route("/v0/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+    async def proxy_v0(request: Request, path: str) -> Response:
+        """
+        Catch-all route for /v0/* requests. Proxies to Airtable API.
+        """
+        return await proxy_to_airtable(request, f"v0/{path}")
 
     return app

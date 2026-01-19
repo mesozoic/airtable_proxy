@@ -21,9 +21,11 @@
 
 - Put source in `src/airtable_proxy/` and tests in `tests/`
 - Tests for `src/airtable_proxy/module/submodule.py` go in `tests/test_module_submodule.py`
-- Use outside-in test driven development.
-- Follow red-green-refactor. Don't clean up code before it works.
-- Always ask for confirmation after changing tests, before implementation.
+- Use test driven development and red-green-refactor.
+    - Write tests first, ask for review, then make the tests pass.
+    - Always ask for confirmation when writing or changing tests.
+    - Don't refactor or clean up code until implementation passes tests.
+    - Don't remove tests when refactoring or cleaning up your code.
 - Do not use type annotations in test files. It's not necessary.
 - Use `@patch` decorator instead of wrapping entire tests in `with patch(...)`
 - Import the module under test; don't import every class/function from it.

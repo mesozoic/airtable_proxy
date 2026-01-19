@@ -47,6 +47,10 @@
     - [x] Need to ensure every operation above is idempotent wrt local storage
     - [x] Only update the local cursor value once a payload is processed
 
+- [x] Proxy anything starting with `/v0/` that isn't handled by a route
+    - [x] Pass along the existing Bearer token when proxying to Airtable
+    - [x] If our application handles a route, we might _still_ need to proxy, so make it easy for us to say "never mind, just proxy the request and return whatever Airtable gives back".
+
 - [ ] Support [list records](https://airtable.com/developers/web/api/list-records)
     - [ ] return all records from local storage, with fields keyed by name
     - [ ] implement `maxRecords`
