@@ -66,6 +66,7 @@
 ## 0.2
 
 - [ ] Make the polling interval configurable
+- [ ] Handle edge case when webhook has been deleted
 
 ## 1.0
 

@@ -25,6 +25,11 @@ types-pyyaml = "^6.0"
 types-requests = "^2.32.4.20260107"
 ruff = "^0.9"
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests (require AIRTABLE_API_KEY)",
+]
+
 [tool.ruff]
 line-length = 101
 

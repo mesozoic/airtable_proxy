@@ -1,6 +1,7 @@
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -34,7 +35,7 @@ class Config(BaseModel):
     storage: StorageConfig = StorageConfig()
 
 
-def load_config(data: dict) -> Config:
+def load_config(data: dict[str, Any]) -> Config:
     return Config.model_validate(data)
 
 

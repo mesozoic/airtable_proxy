@@ -1,2 +1,2 @@
 config.yaml
-data/*.db
+data/*.db*

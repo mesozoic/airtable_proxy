@@ -1,5 +1,7 @@
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -14,7 +16,7 @@ def create_app(config: Config | None = None) -> FastAPI:
         config = load_config_from_file(config_path)
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         """
         Manage application startup and shutdown.
 
@@ -36,7 +38,7 @@ def create_app(config: Config | None = None) -> FastAPI:
     app = FastAPI(lifespan=lifespan)
 
     @app.get("/health")
-    def health():
+    def health() -> dict[str, Any]:
         return {"status": "ok"}
 
     return app

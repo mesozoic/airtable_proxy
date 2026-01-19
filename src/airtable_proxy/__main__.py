@@ -7,7 +7,7 @@ from airtable_proxy.app import create_app
 from airtable_proxy.config import load_config_from_file
 
 
-def main():
+def main() -> None:
     if len(sys.argv) < 2:
         print("Usage: python -m airtable_proxy <config.yaml>")
         sys.exit(1)

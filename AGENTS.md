@@ -1,4 +1,4 @@
-# Project overview
+# Agent instructions
 
 - Read all project information and contributor guidelines in @README.md
 - Maintain the project todo list in @TODO.md
@@ -6,14 +6,19 @@
 - Update this file with notes as you learn about the team's preferred style.
 - Do not give yourself credit in commit messages.
 
+# Common commands
+
+- Use `mypy --strict && pytest` for testing
+- Use `pre-commit run` for formatting after tests pass
+- Run integration tests with `dotenv -f tmp/integration.sh run -- pytest -k integration`
+
 # Application structure
 
 - Avoid overcomplication or YAGNI layers of abstraction.
+- Use type annotations everywhere.
 
 # Testing best practices
 
-- Use `mypy && pytest` for testing
-- Use `pre-commit run` for formatting after tests pass
 - Put source in `src/airtable_proxy/` and tests in `tests/`
 - Tests for `src/airtable_proxy/module/submodule.py` go in `tests/test_module_submodule.py`
 - Use outside-in test driven development.
@@ -22,3 +27,9 @@
 - Do not use type annotations in test files. It's not necessary.
 - Use `@patch` decorator instead of wrapping entire tests in `with patch(...)`
 - Import the module under test; don't import every class/function from it.
+
+
+# Stylistic preferences
+
+- Never use one-line docstrings; always put `"""` on its own line.
+- Avoid massive try/except or try/finally blocks.

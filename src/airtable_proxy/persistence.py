@@ -40,7 +40,7 @@ class RecordInfo(BaseModel):
 
 
 class AirtablePersistence:
-    def __init__(self, storage: Storage):
+    def __init__(self, storage: Storage) -> None:
         self._storage = storage
 
     # Webhook methods
@@ -64,6 +64,13 @@ class AirtablePersistence:
         self._storage.set(
             TableInfo.key(base_id, table_id), TableInfo(table_name=table_name).model_dump()
         )
+
+    def delete_table(self, base_id: str, table_id: str) -> None:
+        """Delete a table and all its records."""
+        prefix = RecordInfo.prefix(base_id, table_id)
+        for key in list(self._storage.keys(prefix)):
+            self._storage.delete(key)
+        self._storage.delete(TableInfo.key(base_id, table_id))
 
     def get_tables(self, base_id: str) -> dict[str, TableInfo]:
         prefix = TableInfo.prefix(base_id)
