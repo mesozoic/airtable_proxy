@@ -13,10 +13,10 @@
         - [x] create a webhook with identifying callback URL
         - [x] save webhook ID and cursor number into local storage
         - [x] fetch all tables and records
-    - [ ] If a webhook exists:
-        - [ ] read the webhook cursor number from local storage
-        - [ ] trigger the "read webhook payloads" job
-        - [ ] re-run the job every 1s after it completes
+    - [x] If a webhook exists:
+        - [x] read the webhook cursor number from local storage
+        - [x] trigger the "read webhook payloads" job
+        - [x] re-run the job every 1s after it completes
 
 - [ ] Authentication
     - [ ] Use the api_key in the configuration to retrieve records
@@ -31,28 +31,32 @@
     - [x] store field values by field ID, not field name
     - [x] store table metadata, including field names
 
-- [ ] "Read webhook payloads" job
-    - [ ] Retrieve payloads and store for async processing
-    - [ ] Process webhook payloads in order, in the background
-    - [ ] Need to support webhook payloads that:
-        - [ ] create a new table
-        - [ ] create a new field
-        - [ ] rename a field
-        - [ ] destroy a field
-        - [ ] create a record
-        - [ ] change a record's field values
-        - [ ] destroy a record
-    - [ ] Need to ensure every operation above is idempotent wrt local storage
-    - [ ] Only update the local cursor value once a payload is processed
+- [x] "Read webhook payloads" job
+    - [x] Retrieve payloads and store for async processing
+    - [x] Process webhook payloads in order, in the background
+    - [x] Need to support webhook payloads that:
+        - [x] create a new table
+        - [x] rename a table
+        - [x] destroy a table
+        - [x] create a new field
+        - [x] rename a field
+        - [x] destroy a field
+        - [x] create a record
+        - [x] change a record's field values
+        - [x] destroy a record
+    - [x] Need to ensure every operation above is idempotent wrt local storage
+    - [x] Only update the local cursor value once a payload is processed
 
 - [ ] Support [list records](https://airtable.com/developers/web/api/list-records)
+    - [ ] return all records from local storage, with fields keyed by name
     - [ ] implement `maxRecords`
-    - [ ] implement `sort`
-    - [ ] implement `fields`
+    - [ ] implement `fields` by ID
+    - [ ] implement `fields` by name
     - [ ] implement `returnFieldsByFieldId`
-    - [ ] ignore `recordMetadata`; we don't need to support it now
-    - [ ] ignore `pageSize`; we will never return multiple pages
-    - [ ] ignore `offset`; we will never return multiple pages
+    - [ ] ignore `sort` for MVP
+    - [ ] ignore `recordMetadata` for MVP
+    - [ ] ignore `pageSize` for MVP
+    - [ ] ignore `offset` for MVP
     - [ ] proxy to Airtable if the `view=` parameter is non-empty
     - [ ] proxy to Airtable if the `filterByFormula=` parameter is non-empty
     - [ ] proxy to Airtable if `cellFormat=string`
@@ -67,6 +71,16 @@
 
 - [ ] Make the polling interval configurable
 - [ ] Handle edge case when webhook has been deleted
+- [ ] Support [get base schema](https://airtable.com/developers/web/api/get-base-schema)
+    - [ ] Refresh schema when webhook is created
+    - [ ] Refresh schema if we've run out of webhook payloads
+    - [ ] Need to support webhook payloads that:
+        - [ ] create a new table
+        - [ ] rename a table
+        - [ ] destroy a table
+        - [ ] create a new field
+        - [ ] change a field
+        - [ ] destroy a field
 
 ## 1.0
 

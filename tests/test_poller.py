@@ -152,7 +152,7 @@ def test_refresh_tables_saves_tables_and_records(tmp_path):
 
 
 @pytest.fixture
-def webhook_cleanup(api, hostname, base):
+def webhook_cleanup(hostname, base):
     """
     Clean up any webhook matching our hostname after the test.
     """

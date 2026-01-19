@@ -40,6 +40,16 @@ def refresh_tables(base: Base, base_id: str, persistence: AirtablePersistence) -
         table_name = table_info.name
         persistence.save_table(base_id, table_id, table_name)
 
+        # Save field metadata
+        for field in table_info.fields:
+            persistence.save_field(
+                base_id,
+                table_id,
+                field.id,
+                field_name=field.name,
+                field_type=field.type,
+            )
+
         table = base.table(table_id)
         for record in table.all(use_field_ids=True):
             persistence.save_record(
@@ -64,6 +74,17 @@ def process_payload(payload: WebhookPayload, base_id: str, persistence: Airtable
         record_count = len(table_created.records_by_id)
         logger.debug(f"Created table {table_id} ({table_name}) with {record_count} record(s)")
         persistence.save_table(base_id, table_id, table_name)
+
+        # Save field metadata for the new table
+        for field_id, field_info in table_created.fields_by_id.items():
+            persistence.save_field(
+                base_id=base_id,
+                table_id=table_id,
+                field_id=field_id,
+                field_name=field_info.name or field_id,
+                field_type=field_info.type or "unknown",
+            )
+
         for record_id, record_created in table_created.records_by_id.items():
             persistence.save_record(
                 base_id=base_id,
@@ -79,11 +100,39 @@ def process_payload(payload: WebhookPayload, base_id: str, persistence: Airtable
         if table_changed.changed_metadata:
             old_name = table_changed.changed_metadata.previous.name
             new_name = table_changed.changed_metadata.current.name
-            logger.debug(f"Renamed table {table_id} from {old_name!r} to {new_name!r}")
-            persistence.save_table(
+            if old_name != new_name:
+                logger.debug(f"Renamed table {table_id} from {old_name!r} to {new_name!r}")
+                persistence.save_table(
+                    base_id=base_id,
+                    table_id=table_id,
+                    table_name=new_name,
+                )
+
+        # Handle destroyed fields
+        for field_id in table_changed.destroyed_field_ids:
+            logger.debug(f"Deleted field {field_id} from table {table_id}")
+            persistence.delete_field(base_id, table_id, field_id)
+
+        # Handle created fields
+        for field_id, field_info in table_changed.created_fields_by_id.items():
+            logger.debug(f"Created field {field_id} in table {table_id}")
+            persistence.save_field(
                 base_id=base_id,
                 table_id=table_id,
-                table_name=new_name,
+                field_id=field_id,
+                field_name=field_info.name or field_id,
+                field_type=field_info.type or "unknown",
+            )
+
+        # Handle changed fields (renames and type changes)
+        for field_id, field_changed in table_changed.changed_fields_by_id.items():
+            logger.debug(f"Updated field {field_id} in table {table_id}")
+            persistence.save_field(
+                base_id=base_id,
+                table_id=table_id,
+                field_id=field_id,
+                field_name=field_changed.current.name or field_id,
+                field_type=field_changed.current.type or "unknown",
             )
 
         # Handle created records

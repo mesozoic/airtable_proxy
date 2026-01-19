@@ -34,6 +34,8 @@ class Storage:
         return json.loads(row[0])
 
     def set(self, key: str, value: Any) -> None:
+        if hasattr(value, "model_dump"):
+            value = value.model_dump()
         self._conn.execute(
             "INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)",
             (key, json.dumps(value)),
