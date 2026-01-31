@@ -2,9 +2,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from airtable_proxy import persistence, poller, storage
+from airtable_proxy import persistence, poller
 from airtable_proxy.config import BaseConfig
 from airtable_proxy.persistence import RecordInfo, TableInfo
+from airtable_proxy.storage import Storage
 
 
 @pytest.fixture
@@ -21,8 +22,12 @@ def valid_config(tmp_path):
 def _setup_mock_api(mock_api):
     mock_api.return_value.whoami.return_value = {"id": "usr123"}
     mock_api.return_value.base.return_value.webhooks.return_value = []
-    mock_api.return_value.base.return_value.add_webhook.return_value = MagicMock(id="wh_new123")
-    mock_api.return_value.base.return_value.webhook.return_value = MagicMock(id="wh_new123")
+    mock_api.return_value.base.return_value.add_webhook.return_value = MagicMock(
+        id="wh_new123"
+    )
+    mock_api.return_value.base.return_value.webhook.return_value = MagicMock(
+        id="wh_new123"
+    )
     mock_api.return_value.base.return_value.schema.return_value.tables = []
 
 
@@ -53,7 +58,9 @@ def test_initialize_finds_existing_webhook(mock_api, valid_config):
     _setup_mock_api(mock_api)
     existing_webhook = MagicMock()
     existing_webhook.id = "wh_existing"
-    existing_webhook.notification_url = "https://airtable-proxy.example.com/webhooks/appTestBase123"
+    existing_webhook.notification_url = (
+        "https://airtable-proxy.example.com/webhooks/appTestBase123"
+    )
     mock_api.return_value.base.return_value.webhooks.return_value = [existing_webhook]
 
     poller.initialize(valid_config)
@@ -84,7 +91,7 @@ def test_find_or_create_webhook_creates_new():
     assert result.id == "wh_new"
 
 
-def test_refresh_tables_saves_tables_and_records(tmp_path):
+def test_refresh_tables_saves_tables_and_records(storage):
     mock_base = MagicMock()
 
     # Set up mock schema with two tables
@@ -119,8 +126,7 @@ def test_refresh_tables_saves_tables_and_records(tmp_path):
         ],
     ]
 
-    store = storage.Storage(tmp_path / "test_db")
-    persist = persistence.AirtablePersistence(store)
+    persist = persistence.AirtablePersistence(storage)
 
     poller.refresh_tables(mock_base, "appBase1", persist)
 
@@ -144,8 +150,6 @@ def test_refresh_tables_saves_tables_and_records(tmp_path):
 
     # Verify table.all was called with use_field_ids=True
     mock_base.table.return_value.all.assert_called_with(use_field_ids=True)
-
-    store.close()
 
 
 # Integration tests against real Airtable API
@@ -179,12 +183,24 @@ def record_cleanup(base):
             table.delete(record_id)
 
 
+@pytest.fixture
+def persist(tmp_path):
+    """
+    Persistence layer backed by a temporary database, for integration tests.
+    """
+    db_path = tmp_path / "test.db"
+    with Storage(db_path) as store:
+        yield persistence.AirtablePersistence(store), db_path
+
+
 @pytest.mark.integration
-def test_poll_base(api, api_key, base_id, hostname, tmp_path, webhook_cleanup, record_cleanup):
+def test_poll_base(
+    api, api_key, base_id, hostname, webhook_cleanup, record_cleanup, persist
+):
     """
     Integration test: initialize poller, create records, poll, verify sync.
     """
-    db_path = tmp_path / "test.db"
+    persist, db_path = persist
     base = api.base(base_id)
     table = base.table("TEST_TABLE")
 
@@ -193,10 +209,6 @@ def test_poll_base(api, api_key, base_id, hostname, tmp_path, webhook_cleanup, r
         "bases": {base_id: {"api_key": api_key}},
         "storage": {"sqlite": str(db_path)},
     }
-
-    # Open persistence to verify polling results
-    store = storage.Storage(db_path)
-    persist = persistence.AirtablePersistence(store)
 
     # Initialize the poller - creates webhook and syncs existing data
     poller.initialize(config)
@@ -242,5 +254,3 @@ def test_poll_base(api, api_key, base_id, hostname, tmp_path, webhook_cleanup, r
     poller.poll_base(base_id, base_config, persist)
     deleted = persist.get_record(base_id, table.id, bob_id)
     assert deleted is None, "Deleted record should be removed from persistence"
-
-    store.close()

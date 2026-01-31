@@ -61,7 +61,9 @@ def refresh_tables(base: Base, base_id: str, persistence: AirtablePersistence) -
             )
 
 
-def process_payload(payload: WebhookPayload, base_id: str, persistence: AirtablePersistence) -> None:
+def process_payload(
+    payload: WebhookPayload, base_id: str, persistence: AirtablePersistence
+) -> None:
     """Process a single webhook payload and update local storage."""
     # Handle destroyed tables
     for table_id in payload.destroyed_table_ids:
@@ -72,7 +74,9 @@ def process_payload(payload: WebhookPayload, base_id: str, persistence: Airtable
     for table_id, table_created in payload.created_tables_by_id.items():
         table_name = table_created.metadata.name if table_created.metadata else table_id
         record_count = len(table_created.records_by_id)
-        logger.debug(f"Created table {table_id} ({table_name}) with {record_count} record(s)")
+        logger.debug(
+            f"Created table {table_id} ({table_name}) with {record_count} record(s)"
+        )
         persistence.save_table(base_id, table_id, table_name)
 
         # Save field metadata for the new table
@@ -101,7 +105,9 @@ def process_payload(payload: WebhookPayload, base_id: str, persistence: Airtable
             old_name = table_changed.changed_metadata.previous.name
             new_name = table_changed.changed_metadata.current.name
             if old_name != new_name:
-                logger.debug(f"Renamed table {table_id} from {old_name!r} to {new_name!r}")
+                logger.debug(
+                    f"Renamed table {table_id} from {old_name!r} to {new_name!r}"
+                )
                 persistence.save_table(
                     base_id=base_id,
                     table_id=table_id,
@@ -176,7 +182,9 @@ def process_payload(payload: WebhookPayload, base_id: str, persistence: Airtable
             )
 
 
-def poll_base(base_id: str, base_config: BaseConfig, persistence: AirtablePersistence) -> None:
+def poll_base(
+    base_id: str, base_config: BaseConfig, persistence: AirtablePersistence
+) -> None:
     """Poll a single base for webhook payloads and process them."""
     webhook_info = persistence.get_webhook(base_id)
     if not webhook_info:
@@ -208,26 +216,42 @@ def initialize(config: dict[str, Any] | Config) -> None:
         config = load_config(config)
 
     config.storage.sqlite.parent.mkdir(parents=True, exist_ok=True)
-    storage = Storage(config.storage.sqlite)
-    persistence = AirtablePersistence(storage)
+    with Storage(config.storage.sqlite) as storage:
+        persistence = AirtablePersistence(storage)
 
-    for base_id, base_config in config.bases.items():
-        api = Api(base_config.api_key)
-        api.whoami()  # Raises if connection fails
-
-        base = api.base(base_id)
-        webhook_info = persistence.get_webhook(base_id)
-
-        if webhook_info:
-            # Existing webhook - poll for any missed payloads
-            logger.info(f"Found existing webhook {webhook_info.webhook_id} for base {base_id}")
-            poll_base(base_id, base_config, persistence)
-        else:
-            # Find or create webhook
+        for base_id, base_config in config.bases.items():
             url = callback_url(config.hostname, base_id)
-            webhook = find_or_create_webhook(base, url)
-            persistence.save_webhook(base_id, webhook_id=webhook.id, cursor=0)
-            refresh_tables(base, base_id, persistence)
+            initialize_base(
+                callback_url=url,
+                base_id=base_id,
+                base_config=base_config,
+                persistence=persistence,
+            )
+
+
+def initialize_base(
+    callback_url: str,
+    base_id: str,
+    base_config: BaseConfig,
+    persistence: AirtablePersistence,
+) -> None:
+    api = Api(base_config.api_key)
+    api.whoami()  # Raises if connection fails
+
+    base = api.base(base_id)
+    webhook_info = persistence.get_webhook(base_id)
+
+    if webhook_info:
+        # Existing webhook - poll for any missed payloads
+        logger.info(
+            f"Found existing webhook {webhook_info.webhook_id} for base {base_id}"
+        )
+        poll_base(base_id, base_config, persistence)
+    else:
+        # Find or create webhook
+        webhook = find_or_create_webhook(base, callback_url)
+        persistence.save_webhook(base_id, webhook_id=webhook.id, cursor=0)
+        refresh_tables(base, base_id, persistence)
 
 
 async def run_polling_loop(config: Config) -> None:
@@ -237,22 +261,24 @@ async def run_polling_loop(config: Config) -> None:
     Polls all bases sequentially, then waits POLL_INTERVAL seconds.
     """
     config.storage.sqlite.parent.mkdir(parents=True, exist_ok=True)
-    storage = Storage(config.storage.sqlite)
-    persistence = AirtablePersistence(storage)
+    with Storage(config.storage.sqlite) as storage:
+        persistence = AirtablePersistence(storage)
 
-    logger.info(f"Starting polling loop for {len(config.bases)} base(s)")
+        logger.info(f"Starting polling loop for {len(config.bases)} base(s)")
 
-    try:
-        while True:
-            for base_id, base_config in config.bases.items():
-                try:
-                    await asyncio.to_thread(poll_base, base_id, base_config, persistence)
-                except Exception as e:
-                    logger.error(f"Error polling base {base_id}: {e}")
+        try:
+            while True:
+                for base_id, base_config in config.bases.items():
+                    try:
+                        await asyncio.to_thread(
+                            poll_base, base_id, base_config, persistence
+                        )
+                    except Exception as e:
+                        logger.error(f"Error polling base {base_id}: {e}")
 
-            await asyncio.sleep(POLL_INTERVAL)
-    except asyncio.CancelledError:
-        logger.info("Polling loop cancelled")
+                await asyncio.sleep(POLL_INTERVAL)
+        except asyncio.CancelledError:
+            logger.info("Polling loop cancelled")
 
 
 @click.command()

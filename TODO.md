@@ -51,20 +51,20 @@
     - [x] Pass along the existing Bearer token when proxying to Airtable
     - [x] If our application handles a route, we might _still_ need to proxy, so make it easy for us to say "never mind, just proxy the request and return whatever Airtable gives back".
 
-- [ ] Support [list records](https://airtable.com/developers/web/api/list-records)
-    - [ ] return all records from local storage, with fields keyed by name
-    - [ ] implement `maxRecords`
-    - [ ] implement `fields` by ID
-    - [ ] implement `fields` by name
-    - [ ] implement `returnFieldsByFieldId`
-    - [ ] ignore `sort` for MVP
-    - [ ] ignore `recordMetadata` for MVP
-    - [ ] ignore `pageSize` for MVP
-    - [ ] ignore `offset` for MVP
-    - [ ] proxy to Airtable if the `view=` parameter is non-empty
-    - [ ] proxy to Airtable if the `filterByFormula=` parameter is non-empty
-    - [ ] proxy to Airtable if `cellFormat=string`
-    - [ ] proxy to Airtable if table is missing from local storage
+- [x] Support [list records](https://airtable.com/developers/web/api/list-records)
+    - [x] return all records from local storage, with fields keyed by name
+    - [x] implement `maxRecords`
+    - [x] implement `fields` by ID
+    - [x] implement `fields` by name
+    - [x] implement `returnFieldsByFieldId`
+    - [x] ignore `sort` for MVP
+    - [x] ignore `recordMetadata` for MVP
+    - [x] ignore `pageSize` for MVP
+    - [x] ignore `offset` for MVP
+    - [x] proxy to Airtable if the `view=` parameter is non-empty
+    - [x] proxy to Airtable if the `filterByFormula=` parameter is non-empty
+    - [x] proxy to Airtable if `cellFormat=string`
+    - [x] proxy to Airtable if table is missing from local storage
 
 - [ ] Support [get record](https://airtable.com/developers/web/api/get-record)
     - [ ] implement `returnFieldsByFieldId`

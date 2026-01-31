@@ -4,6 +4,17 @@ import uuid
 import pytest
 from pyairtable import Api, Base
 
+from airtable_proxy.storage import Storage
+
+
+@pytest.fixture
+def storage(tmp_path):
+    """
+    A Storage instance that is automatically closed after the test.
+    """
+    with Storage(tmp_path / "test.db") as s:
+        yield s
+
 
 @pytest.fixture
 def api_key():

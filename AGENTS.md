@@ -8,7 +8,7 @@
 
 # Common commands
 
-- Use `mypy --strict && pytest` for testing
+- Use `mypy --strict && pytest --cov` for testing
 - Use `pre-commit run` for formatting after tests pass
 - Run integration tests with `dotenv -f tmp/integration.sh run -- pytest -k integration`
 
@@ -20,7 +20,10 @@
 # Testing best practices
 
 - Put source in `src/airtable_proxy/` and tests in `tests/`
-- Tests for `src/airtable_proxy/module/submodule.py` go in `tests/test_module_submodule.py`
+- Tests for `src/airtable_proxy/module/submodule.py` go in:
+    - `tests/test_module_submodule.py` for unit tests
+    - `tests/integration/itest_module_submodule.py` for integration tests
+- Integration tests for `src/airtable_proxy/module/submodule.py` go in `tests/integration/itest_module_submodule.py`
 - Use test driven development and red-green-refactor.
     - Write tests first, ask for review, then make the tests pass.
     - Always ask for confirmation when writing or changing tests.
@@ -30,8 +33,8 @@
 - Use `@patch` decorator instead of wrapping entire tests in `with patch(...)`
 - Import the module under test; don't import every class/function from it.
 
-
 # Stylistic preferences
 
 - Never use one-line docstrings; always put `"""` on its own line.
 - Avoid massive try/except or try/finally blocks.
+-
