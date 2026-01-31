@@ -1,7 +1,7 @@
 import pytest
 
 from airtable_proxy import persistence
-from airtable_proxy.persistence import RecordInfo, TableInfo, WebhookInfo
+from airtable_proxy.persistence import FieldInfo, RecordInfo, TableInfo, WebhookInfo
 
 
 @pytest.fixture
@@ -84,3 +84,37 @@ def test_get_records_for_table(persist):
 
     records = persist.get_records("appBase1", "tbl1")
     assert sorted(records.keys()) == ["recA", "recB"]
+
+
+# Delete table tests
+
+
+def test_delete_table_removes_table_fields_and_records(persist):
+    persist.save_table("appBase1", "tbl1", "Table One")
+    persist.save_field("appBase1", "tbl1", "fld1", field_name="Name", field_type="text")
+    persist.save_record("appBase1", "tbl1", "rec1", fields={"fld1": "x"}, created_time="t")
+
+    persist.delete_table("appBase1", "tbl1")
+
+    assert persist.get_table("appBase1", "tbl1") is None
+    assert persist.get_field("appBase1", "tbl1", "fld1") is None
+    assert persist.get_record("appBase1", "tbl1", "rec1") is None
+
+
+# Field tests
+
+
+def test_get_field_returns_none_when_missing(persist):
+    assert persist.get_field("appBase1", "tbl1", "fldMissing") is None
+
+
+def test_save_and_get_field(persist):
+    persist.save_field("appBase1", "tbl1", "fld1", field_name="Name", field_type="text")
+    field = persist.get_field("appBase1", "tbl1", "fld1")
+    assert field == FieldInfo(field_name="Name", field_type="text")
+
+
+def test_delete_field(persist):
+    persist.save_field("appBase1", "tbl1", "fld1", field_name="Name", field_type="text")
+    persist.delete_field("appBase1", "tbl1", "fld1")
+    assert persist.get_field("appBase1", "tbl1", "fld1") is None

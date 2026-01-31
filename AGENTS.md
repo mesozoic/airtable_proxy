@@ -8,7 +8,7 @@
 
 # Common commands
 
-- Use `mypy --strict && pytest --cov` for testing
+- Use `mypy --strict && pytest` for testing
 - Use `pre-commit run` for formatting after tests pass
 - Run integration tests with `dotenv -f tmp/integration.sh run -- pytest -k integration`
 

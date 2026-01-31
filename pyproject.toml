@@ -30,7 +30,21 @@ ruff = "^0.9"
 markers = [
     "integration: marks tests as integration tests (require AIRTABLE_API_KEY)",
 ]
-addopts = "--cov=src/airtable_proxy --cov-report=term-missing --cov-fail-under=100"
+python_files = ["test_*.py", "*_test.py", "itest_*.py"]
+addopts = "--cov --cov-report=term-missing --cov-fail-under=100"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
 
 [tool.ruff]
 line-length = 101

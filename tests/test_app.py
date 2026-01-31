@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, patch
+import os
 
 import httpx
 from fastapi.testclient import TestClient
@@ -107,6 +108,19 @@ def test_proxy_passes_query_params(tmp_path):
         call_kwargs = mock_client.return_value.request.call_args.kwargs
         assert "maxRecords" in str(call_kwargs["params"])
         assert "view" in str(call_kwargs["params"])
+
+
+def test_create_app_loads_config_from_env(tmp_path):
+    """When config is None, create_app loads from AIRTABLE_PROXY_CONFIG env var."""
+    config_file = tmp_path / "env_config.yaml"
+    config_file.write_text(
+        f"hostname: test.example.com\nbases: {{}}\nstorage:\n  sqlite: {tmp_path / 'test.db'}\n"
+    )
+    with patch.dict("os.environ", {"AIRTABLE_PROXY_CONFIG": str(config_file)}):
+        application = app.create_app(config=None)
+    with TestClient(application) as client:
+        response = client.get("/health")
+        assert response.status_code == 200
 
 
 def test_proxy_forwards_error_responses(tmp_path):

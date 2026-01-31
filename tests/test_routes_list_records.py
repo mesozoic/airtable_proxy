@@ -163,6 +163,25 @@ def test_omits_empty_values(client_with_data):
     assert empty_rec["fields"] == {}
 
 
+def test_omits_empty_list_values(client_with_data):
+    """Records omit fields with empty list values (Airtable behavior)."""
+    client, persistence = client_with_data
+    rec_empty_list = fake_id("rec")
+    persistence.save_record(
+        BASE_ID,
+        TABLE_ID,
+        rec_empty_list,
+        {FLD_NAME: "Has Empty List", FLD_AGE: 10, FLD_ACTIVE: []},
+        "2024-01-05T00:00:00.000Z",
+    )
+
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}")
+    records = response.json()["records"]
+    rec = next(r for r in records if r["id"] == rec_empty_list)
+    assert "Active" not in rec["fields"]
+    assert rec["fields"]["Name"] == "Has Empty List"
+
+
 # Proxy condition tests
 
 
