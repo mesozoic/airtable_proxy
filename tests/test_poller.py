@@ -23,6 +23,124 @@ HOSTNAME = "airtable-proxy.example.com"
 CALLBACK_URL = f"https://{HOSTNAME}/webhooks/{BASE_ID}"
 
 
+class MockAirtableApi:
+    """
+    Extends MockAirtable with requests_mock to support endpoints that
+    MockAirtable doesn't handle: whoami, schema, webhooks, and payloads.
+
+    MockAirtable handles table-level CRUD (iterate, get, create, etc.).
+    This class layers on requests_mock (via ``enable_passthrough``) to
+    provide the remaining Airtable REST API surface area.
+    """
+
+    def __init__(self, mock_at: MockAirtable, requests_mock):
+        self.mock_at = mock_at
+        self.requests_mock = requests_mock
+
+    # -- MockAirtable delegation --
+
+    def add_records(self, base_id, table_id_or_name, records):
+        """Add records that will be returned by Table.all() / Table.iterate()."""
+        self.mock_at.add_records(base_id, table_id_or_name, records)
+
+    # -- JSON builders for Airtable API responses --
+
+    @staticmethod
+    def webhook_json(webhook_id, notification_url=None):
+        """Build a webhook object matching Airtable's ``GET .../webhooks`` response."""
+        return {
+            "id": webhook_id,
+            "type": "client",
+            "isHookEnabled": True,
+            "areNotificationsEnabled": True,
+            "notificationUrl": notification_url,
+            "cursorForNextPayload": 1,
+            "createdTime": "2024-01-01T00:00:00.000Z",
+            "specification": {"options": {"filters": {"dataTypes": ["tableData"]}}},
+        }
+
+    @staticmethod
+    def table_json(table_id, name, fields=None):
+        """Build a table object matching Airtable's schema (``GET .../tables``) response."""
+        return {
+            "id": table_id,
+            "name": name,
+            "primaryFieldId": "fldPrimary",
+            "fields": fields or [],
+            "views": [{"id": "viwXXX", "name": "Grid view", "type": "grid"}],
+        }
+
+    @staticmethod
+    def field_json(field_id, name, field_type):
+        """Build a field object for use inside ``table_json(fields=[...])``."""
+        return {"id": field_id, "name": name, "type": field_type}
+
+    # -- Endpoint registration --
+
+    def mock_whoami(self, user_id="usr123"):
+        """Mock ``GET /v0/meta/whoami``."""
+        self.requests_mock.get(f"{API_URL}/v0/meta/whoami", json={"id": user_id})
+
+    def mock_schema(self, base_id, tables):
+        """Mock ``GET /v0/meta/bases/{base_id}/tables``."""
+        self.requests_mock.get(
+            f"{API_URL}/v0/meta/bases/{base_id}/tables",
+            json={"tables": tables},
+        )
+
+    def mock_list_webhooks(self, base_id, webhooks):
+        """Mock ``GET /v0/bases/{base_id}/webhooks`` with a single response."""
+        self.requests_mock.get(
+            f"{API_URL}/v0/bases/{base_id}/webhooks",
+            json={"webhooks": webhooks},
+        )
+
+    def mock_list_webhooks_sequence(self, base_id, *webhook_lists):
+        """Mock ``GET /v0/bases/{base_id}/webhooks`` with sequential responses."""
+        self.requests_mock.get(
+            f"{API_URL}/v0/bases/{base_id}/webhooks",
+            [{"json": {"webhooks": wh}} for wh in webhook_lists],
+        )
+
+    def mock_create_webhook(self, base_id, webhook_id="achNew"):
+        """Mock ``POST /v0/bases/{base_id}/webhooks``."""
+        self.requests_mock.post(
+            f"{API_URL}/v0/bases/{base_id}/webhooks",
+            json={
+                "id": webhook_id,
+                "macSecretBase64": "dGVzdA==",
+                "expirationTime": "2025-01-01T00:00:00.000Z",
+            },
+        )
+
+    def mock_webhook_payloads(self, base_id, webhook_id, payloads, cursor=1):
+        """Mock ``GET /v0/bases/{base_id}/webhooks/{webhook_id}/payloads``."""
+        self.requests_mock.get(
+            f"{API_URL}/v0/bases/{base_id}/webhooks/{webhook_id}/payloads",
+            json={
+                "payloads": payloads,
+                "cursor": cursor,
+                "mightHaveMore": False,
+            },
+        )
+
+    @property
+    def request_history(self):
+        """Shortcut for ``requests_mock.request_history``."""
+        return self.requests_mock.request_history
+
+
+@pytest.fixture
+def airtable_api(requests_mock):
+    """
+    A ``MockAirtableApi`` fixture that combines ``MockAirtable`` (for table CRUD)
+    with ``requests_mock`` (for schema, webhooks, whoami, and payloads).
+    """
+    with MockAirtable() as m:
+        with m.enable_passthrough():
+            yield MockAirtableApi(m, requests_mock)
+
+
 @pytest.fixture
 def valid_config(tmp_path):
     return {
@@ -32,159 +150,64 @@ def valid_config(tmp_path):
     }
 
 
-@pytest.fixture
-def mock_at():
-    """MockAirtable with passthrough for requests_mock to handle non-table API calls."""
-    with MockAirtable() as m:
-        with m.enable_passthrough():
-            yield m
-
-
-# -- JSON response helpers --
-
-
-def _webhook_json(webhook_id, notification_url=None):
-    """Webhook JSON matching Airtable's API response format."""
-    return {
-        "id": webhook_id,
-        "type": "client",
-        "isHookEnabled": True,
-        "areNotificationsEnabled": True,
-        "notificationUrl": notification_url,
-        "cursorForNextPayload": 1,
-        "createdTime": "2024-01-01T00:00:00.000Z",
-        "specification": {"options": {"filters": {"dataTypes": ["tableData"]}}},
-    }
-
-
-def _table_schema_json(table_id, name, fields=None):
-    return {
-        "id": table_id,
-        "name": name,
-        "primaryFieldId": "fldPrimary",
-        "fields": fields or [],
-        "views": [{"id": "viwXXX", "name": "Grid view", "type": "grid"}],
-    }
-
-
-def _field_schema_json(field_id, name, field_type):
-    return {"id": field_id, "name": name, "type": field_type}
-
-
-# -- requests_mock registration helpers --
-
-
-def _setup_whoami(rm):
-    rm.get(f"{API_URL}/v0/meta/whoami", json={"id": "usr123"})
-
-
-def _setup_schema(rm, base_id, tables):
-    rm.get(f"{API_URL}/v0/meta/bases/{base_id}/tables", json={"tables": tables})
-
-
-def _setup_webhooks(rm, base_id, webhooks):
-    rm.get(f"{API_URL}/v0/bases/{base_id}/webhooks", json={"webhooks": webhooks})
-
-
-def _setup_webhooks_sequence(rm, base_id, responses):
-    """Register sequential responses for the webhooks list endpoint."""
-    rm.get(
-        f"{API_URL}/v0/bases/{base_id}/webhooks",
-        [{"json": {"webhooks": wh}} for wh in responses],
-    )
-
-
-def _setup_create_webhook(rm, base_id, webhook_id="achNew"):
-    rm.post(
-        f"{API_URL}/v0/bases/{base_id}/webhooks",
-        json={
-            "id": webhook_id,
-            "macSecretBase64": "dGVzdA==",
-            "expirationTime": "2025-01-01T00:00:00.000Z",
-        },
-    )
-
-
-def _setup_payloads(rm, base_id, webhook_id, payloads_json, cursor=1):
-    rm.get(
-        f"{API_URL}/v0/bases/{base_id}/webhooks/{webhook_id}/payloads",
-        json={"payloads": payloads_json, "cursor": cursor, "mightHaveMore": False},
-    )
-
-
 # -- initialize tests --
 
 
-def test_initialize_calls_whoami_for_each_base(mock_at, requests_mock, valid_config):
-    _setup_whoami(requests_mock)
-    _setup_webhooks_sequence(
-        requests_mock,
+def test_initialize_calls_whoami_for_each_base(airtable_api, valid_config):
+    airtable_api.mock_whoami()
+    airtable_api.mock_list_webhooks_sequence(
         BASE_ID,
-        [
-            [],
-            [_webhook_json("achNew", CALLBACK_URL)],
-        ],
+        [],
+        [airtable_api.webhook_json("achNew", CALLBACK_URL)],
     )
-    _setup_create_webhook(requests_mock, BASE_ID)
-    _setup_schema(requests_mock, BASE_ID, [])
+    airtable_api.mock_create_webhook(BASE_ID)
+    airtable_api.mock_schema(BASE_ID, [])
 
     poller.initialize(valid_config)
 
-    assert any(r.path == "/v0/meta/whoami" for r in requests_mock.request_history)
+    assert any(r.path == "/v0/meta/whoami" for r in airtable_api.request_history)
 
 
-def test_initialize_fails_if_airtable_unavailable(mock_at, requests_mock, valid_config):
-    requests_mock.get(f"{API_URL}/v0/meta/whoami", status_code=500)
+def test_initialize_fails_if_airtable_unavailable(airtable_api, valid_config):
+    airtable_api.requests_mock.get(f"{API_URL}/v0/meta/whoami", status_code=500)
     with pytest.raises(Exception):
         poller.initialize(valid_config)
 
 
-def test_initialize_creates_webhook_if_not_exists(mock_at, requests_mock, valid_config):
-    _setup_whoami(requests_mock)
-    _setup_webhooks_sequence(
-        requests_mock,
+def test_initialize_creates_webhook_if_not_exists(airtable_api, valid_config):
+    airtable_api.mock_whoami()
+    airtable_api.mock_list_webhooks_sequence(
         BASE_ID,
-        [
-            [],
-            [_webhook_json("achNew", CALLBACK_URL)],
-        ],
+        [],
+        [airtable_api.webhook_json("achNew", CALLBACK_URL)],
     )
-    _setup_create_webhook(requests_mock, BASE_ID)
-    _setup_schema(requests_mock, BASE_ID, [])
+    airtable_api.mock_create_webhook(BASE_ID)
+    airtable_api.mock_schema(BASE_ID, [])
 
     poller.initialize(valid_config)
 
-    assert any(
-        r.method == "POST" and "webhooks" in r.path
-        for r in requests_mock.request_history
-    )
+    assert any(r.method == "POST" and "webhooks" in r.path for r in airtable_api.request_history)
 
 
-def test_initialize_finds_existing_webhook(mock_at, requests_mock, valid_config):
-    _setup_whoami(requests_mock)
-    _setup_webhooks(
-        requests_mock, BASE_ID, [_webhook_json("achExisting", CALLBACK_URL)]
+def test_initialize_finds_existing_webhook(airtable_api, valid_config):
+    airtable_api.mock_whoami()
+    airtable_api.mock_list_webhooks(
+        BASE_ID, [airtable_api.webhook_json("achExisting", CALLBACK_URL)]
     )
-    _setup_schema(requests_mock, BASE_ID, [])
+    airtable_api.mock_schema(BASE_ID, [])
 
     poller.initialize(valid_config)
 
-    assert not any(
-        r.method == "POST" and "webhooks" in r.path
-        for r in requests_mock.request_history
-    )
+    assert not any(r.method == "POST" and "webhooks" in r.path for r in airtable_api.request_history)
 
 
 # -- find_or_create_webhook tests --
 
 
-def test_find_or_create_webhook_finds_existing(mock_at, requests_mock):
-    _setup_webhooks(
-        requests_mock,
+def test_find_or_create_webhook_finds_existing(airtable_api):
+    airtable_api.mock_list_webhooks(
         "appX",
-        [
-            _webhook_json("achExist", "https://example.com/callback"),
-        ],
+        [airtable_api.webhook_json("achExist", "https://example.com/callback")],
     )
 
     api = Api(API_KEY)
@@ -194,16 +217,13 @@ def test_find_or_create_webhook_finds_existing(mock_at, requests_mock):
     assert result.id == "achExist"
 
 
-def test_find_or_create_webhook_creates_new(mock_at, requests_mock):
-    _setup_webhooks_sequence(
-        requests_mock,
+def test_find_or_create_webhook_creates_new(airtable_api):
+    airtable_api.mock_list_webhooks_sequence(
         "appX",
-        [
-            [],
-            [_webhook_json("achNew", "https://example.com/callback")],
-        ],
+        [],
+        [airtable_api.webhook_json("achNew", "https://example.com/callback")],
     )
-    _setup_create_webhook(requests_mock, "appX", "achNew")
+    airtable_api.mock_create_webhook("appX", "achNew")
 
     api = Api(API_KEY)
     base = api.base("appX")
@@ -215,16 +235,15 @@ def test_find_or_create_webhook_creates_new(mock_at, requests_mock):
 # -- refresh_tables tests --
 
 
-def test_refresh_tables_saves_tables_and_records(mock_at, requests_mock, storage):
-    _setup_schema(
-        requests_mock,
+def test_refresh_tables_saves_tables_and_records(airtable_api, storage):
+    airtable_api.mock_schema(
         "appBase1",
         [
-            _table_schema_json("tbl1", "Table One"),
-            _table_schema_json("tbl2", "Table Two"),
+            airtable_api.table_json("tbl1", "Table One"),
+            airtable_api.table_json("tbl2", "Table Two"),
         ],
     )
-    mock_at.add_records(
+    airtable_api.add_records(
         "appBase1",
         "tbl1",
         [
@@ -240,7 +259,7 @@ def test_refresh_tables_saves_tables_and_records(mock_at, requests_mock, storage
             },
         ],
     )
-    mock_at.add_records(
+    airtable_api.add_records(
         "appBase1",
         "tbl2",
         [
@@ -274,20 +293,19 @@ def test_refresh_tables_saves_tables_and_records(mock_at, requests_mock, storage
     )
 
 
-def test_refresh_tables_saves_fields(mock_at, requests_mock, storage):
+def test_refresh_tables_saves_fields(airtable_api, storage):
     """refresh_tables saves field metadata for each table."""
-    _setup_schema(
-        requests_mock,
+    airtable_api.mock_schema(
         "appBase1",
         [
-            _table_schema_json(
+            airtable_api.table_json(
                 "tbl1",
                 "Table One",
-                fields=[_field_schema_json("fldX", "Status", "singleSelect")],
+                fields=[airtable_api.field_json("fldX", "Status", "singleSelect")],
             ),
         ],
     )
-    mock_at.add_records("appBase1", "tbl1", [])
+    airtable_api.add_records("appBase1", "tbl1", [])
 
     api = Api(API_KEY)
     base = api.base("appBase1")
@@ -456,9 +474,7 @@ def test_process_payload_created_records(storage):
 
 def test_process_payload_changed_records(storage):
     persist = AirtablePersistence(storage)
-    persist.save_record(
-        "appB", "tbl1", "rec1", fields={"fld1": "old"}, created_time="t"
-    )
+    persist.save_record("appB", "tbl1", "rec1", fields={"fld1": "old"}, created_time="t")
 
     payload = _make_payload(
         changedTablesById={
@@ -524,15 +540,14 @@ def test_poll_base_no_webhook_info(storage):
     poller.poll_base("appMissing", base_config, persist)
 
 
-def test_poll_base_processes_payloads(mock_at, requests_mock, storage):
+def test_poll_base_processes_payloads(airtable_api, storage):
     persist = AirtablePersistence(storage)
     persist.save_webhook("appB", webhook_id="whX", cursor=5)
     persist.save_table("appB", "tbl1", "Table")
     persist.save_record("appB", "tbl1", "rec1", fields={"f": "old"}, created_time="t")
 
-    _setup_webhooks(requests_mock, "appB", [_webhook_json("whX")])
-    _setup_payloads(
-        requests_mock,
+    airtable_api.mock_list_webhooks("appB", [airtable_api.webhook_json("whX")])
+    airtable_api.mock_webhook_payloads(
         "appB",
         "whX",
         [
@@ -566,13 +581,13 @@ def test_poll_base_processes_payloads(mock_at, requests_mock, storage):
 # -- initialize_base with existing webhook --
 
 
-def test_initialize_base_existing_webhook_polls(mock_at, requests_mock, storage):
+def test_initialize_base_existing_webhook_polls(airtable_api, storage):
     persist = AirtablePersistence(storage)
     persist.save_webhook("appB", webhook_id="whExist", cursor=3)
 
-    _setup_whoami(requests_mock)
-    _setup_webhooks(requests_mock, "appB", [_webhook_json("whExist")])
-    _setup_payloads(requests_mock, "appB", "whExist", [], cursor=3)
+    airtable_api.mock_whoami()
+    airtable_api.mock_list_webhooks("appB", [airtable_api.webhook_json("whExist")])
+    airtable_api.mock_webhook_payloads("appB", "whExist", [], cursor=3)
 
     base_config = BaseConfig(api_key=API_KEY)
     poller.initialize_base(
@@ -582,10 +597,7 @@ def test_initialize_base_existing_webhook_polls(mock_at, requests_mock, storage)
         persistence=persist,
     )
 
-    assert not any(
-        r.method == "POST" and "webhooks" in r.path
-        for r in requests_mock.request_history
-    )
+    assert not any(r.method == "POST" and "webhooks" in r.path for r in airtable_api.request_history)
 
 
 # -- run_polling_loop tests --
@@ -630,9 +642,7 @@ def test_run_polling_loop_polls_and_handles_errors(tmp_path):
 @patch("airtable_proxy.poller.load_config_from_file")
 def test_main_once(mock_load, mock_init, tmp_path):
     config_file = tmp_path / "config.yaml"
-    config_file.write_text(
-        "hostname: test\nbases: {}\nstorage:\n  sqlite: /tmp/test.db\n"
-    )
+    config_file.write_text("hostname: test\nbases: {}\nstorage:\n  sqlite: /tmp/test.db\n")
     mock_load.return_value = MagicMock()
 
     from click.testing import CliRunner
@@ -646,13 +656,9 @@ def test_main_once(mock_load, mock_init, tmp_path):
 @patch("airtable_proxy.poller.asyncio.run")
 @patch("airtable_proxy.poller.load_config_from_file")
 @patch("airtable_proxy.poller.initialize")
-def test_main_without_once_runs_polling(
-    _mock_init, mock_load, mock_asyncio_run, tmp_path
-):
+def test_main_without_once_runs_polling(_mock_init, mock_load, mock_asyncio_run, tmp_path):
     config_file = tmp_path / "config.yaml"
-    config_file.write_text(
-        "hostname: test\nbases: {}\nstorage:\n  sqlite: /tmp/test.db\n"
-    )
+    config_file.write_text("hostname: test\nbases: {}\nstorage:\n  sqlite: /tmp/test.db\n")
     mock_load.return_value = MagicMock()
 
     from click.testing import CliRunner
