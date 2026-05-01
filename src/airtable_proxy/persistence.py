@@ -161,3 +161,11 @@ class AirtablePersistence:
             data = self._storage.get(key)
             result[record_id] = RecordInfo.model_validate(data)
         return result
+
+    # Auth methods
+
+    def has_auth(self, base_id: str, token_hash: str) -> bool:
+        return self._storage.get(f"auth:{base_id}:{token_hash}") is not None
+
+    def save_auth(self, base_id: str, token_hash: str) -> None:
+        self._storage.set(f"auth:{base_id}:{token_hash}", True)
