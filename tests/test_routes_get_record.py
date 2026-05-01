@@ -82,3 +82,42 @@ def test_returns_record_by_table_name(client_with_data, table_id_or_name):
 
     assert response.status_code == 200
     assert response.json()["id"] == REC_1
+
+
+def test_returns_fields_by_name_by_default(client_with_data):
+    client, _ = client_with_data
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}/{REC_1}")
+
+    fields = response.json()["fields"]
+    assert "Name" in fields
+    assert "Age" in fields
+    assert FLD_NAME not in fields
+
+
+def test_return_fields_by_field_id_true(client_with_data):
+    client, _ = client_with_data
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}/{REC_1}?returnFieldsByFieldId=true")
+
+    fields = response.json()["fields"]
+    assert FLD_NAME in fields
+    assert FLD_AGE in fields
+    assert "Name" not in fields
+    assert fields[FLD_NAME] == "Alice"
+
+
+def test_omits_empty_values(client_with_data):
+    """Empty fields are omitted, matching Airtable's behavior."""
+    client, persistence = client_with_data
+    rec_empty = fake_id("rec")
+    persistence.save_record(
+        BASE_ID,
+        TABLE_ID,
+        rec_empty,
+        {FLD_NAME: "", FLD_AGE: None, FLD_ACTIVE: False},
+        "2024-01-04T00:00:00.000Z",
+    )
+
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}/{rec_empty}")
+
+    assert response.status_code == 200
+    assert response.json()["fields"] == {}
