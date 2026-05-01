@@ -1,13 +1,4 @@
-import pytest
-
-from airtable_proxy import persistence
 from airtable_proxy.persistence import FieldInfo, RecordInfo, TableInfo, WebhookInfo
-
-
-@pytest.fixture
-def persist(storage):
-    return persistence.AirtablePersistence(storage)
-
 
 # Webhook tests
 

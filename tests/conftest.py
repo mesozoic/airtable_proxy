@@ -2,8 +2,11 @@ import os
 import uuid
 
 import pytest
+from fastapi import FastAPI, Request
 from pyairtable import Api, Base
 
+from airtable_proxy import auth
+from airtable_proxy.persistence import AirtablePersistence
 from airtable_proxy.storage import Storage
 
 
@@ -14,6 +17,32 @@ def storage(tmp_path):
     """
     with Storage(tmp_path / "test.db") as s:
         yield s
+
+
+@pytest.fixture
+def persist(storage):
+    """
+    An AirtablePersistence backed by a fresh per-test Storage.
+    """
+    return AirtablePersistence(storage)
+
+
+@pytest.fixture
+def auth_app(persist):
+    """
+    A minimal FastAPI app exposing a single route that delegates to
+    `auth.require_auth`. Used to test authentication in isolation
+    from the real route handlers.
+    """
+    app = FastAPI()
+    app.state.persistence = persist
+
+    @app.get("/v0/{base_id}/{table_id_or_name}")
+    async def test_route(request: Request, base_id: str, table_id_or_name: str):
+        await auth.require_auth(request, base_id, persist)
+        return {"ok": True}
+
+    return app
 
 
 @pytest.fixture
