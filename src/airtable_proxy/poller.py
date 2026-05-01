@@ -176,26 +176,56 @@ def process_payload(payload: WebhookPayload, base_id: str, persistence: Airtable
             )
 
 
-def poll_base(base_id: str, base_config: BaseConfig, persistence: AirtablePersistence) -> None:
-    """Poll a single base for webhook payloads and process them."""
-    webhook_info = persistence.get_webhook(base_id)
-    if not webhook_info:
-        logger.warning(f"No webhook info for base {base_id}, skipping")
-        return
+class BasePoller:
+    """Polls a single Airtable base for webhook payloads."""
 
-    api = Api(base_config.api_key)
-    base = api.base(base_id)
-    webhook = base.webhook(webhook_info.webhook_id)
+    def __init__(
+        self, base_id: str, base_config: BaseConfig, persistence: AirtablePersistence
+    ) -> None:
+        self.base_id = base_id
+        self.base_config = base_config
+        self.persistence = persistence
+        self._webhook = None  # Cached webhook handle
 
-    # Start from cursor + 1 (cursor is last processed, we want next)
-    cursor = webhook_info.cursor + 1 if webhook_info.cursor > 0 else 1
+    def poll(self) -> None:
+        """Poll the base for webhook payloads and process them."""
+        webhook_info = self.persistence.get_webhook(self.base_id)
+        if not webhook_info:
+            logger.warning(f"No webhook info for base {self.base_id}, skipping")
+            return
 
-    for payload in webhook.payloads(cursor=cursor):
-        process_payload(payload, base_id, persistence)
-        # cursor is always set by pyairtable when iterating payloads
-        assert payload.cursor is not None
-        persistence.save_webhook(base_id, webhook_info.webhook_id, payload.cursor)
-        logger.info(f"Processed payload {payload.cursor} for base {base_id}")
+        if self._webhook is None:
+            api = Api(self.base_config.api_key)
+            base = api.base(self.base_id)
+            self._webhook = base.webhook(webhook_info.webhook_id)
+
+        # Start from cursor + 1 (cursor is last processed, we want next)
+        cursor = webhook_info.cursor + 1 if webhook_info.cursor > 0 else 1
+
+        for payload in self._webhook.payloads(cursor=cursor):
+            process_payload(payload, self.base_id, self.persistence)
+            # cursor is always set by pyairtable when iterating payloads
+            assert payload.cursor is not None
+            self.persistence.save_webhook(self.base_id, webhook_info.webhook_id, payload.cursor)
+            logger.info(f"Processed payload {payload.cursor} for base {self.base_id}")
+
+    def initialize(self, callback_url: str) -> None:
+        """Initialize the webhook for this base, polling if one already exists."""
+        api = Api(self.base_config.api_key)
+        api.whoami()  # Raises if connection fails
+
+        base = api.base(self.base_id)
+        webhook_info = self.persistence.get_webhook(self.base_id)
+
+        if webhook_info:
+            # Existing webhook - poll for any missed payloads
+            logger.info(f"Found existing webhook {webhook_info.webhook_id} for base {self.base_id}")
+            self.poll()
+        else:
+            # Find or create webhook
+            webhook = find_or_create_webhook(base, callback_url)
+            self.persistence.save_webhook(self.base_id, webhook_id=webhook.id, cursor=0)
+            refresh_tables(base, self.base_id, self.persistence)
 
 
 def initialize(config: dict[str, Any] | Config) -> None:
@@ -213,35 +243,7 @@ def initialize(config: dict[str, Any] | Config) -> None:
 
         for base_id, base_config in config.bases.items():
             url = callback_url(config.hostname, base_id)
-            initialize_base(
-                callback_url=url,
-                base_id=base_id,
-                base_config=base_config,
-                persistence=persistence,
-            )
-
-
-def initialize_base(
-    callback_url: str,
-    base_id: str,
-    base_config: BaseConfig,
-    persistence: AirtablePersistence,
-) -> None:
-    api = Api(base_config.api_key)
-    api.whoami()  # Raises if connection fails
-
-    base = api.base(base_id)
-    webhook_info = persistence.get_webhook(base_id)
-
-    if webhook_info:
-        # Existing webhook - poll for any missed payloads
-        logger.info(f"Found existing webhook {webhook_info.webhook_id} for base {base_id}")
-        poll_base(base_id, base_config, persistence)
-    else:
-        # Find or create webhook
-        webhook = find_or_create_webhook(base, callback_url)
-        persistence.save_webhook(base_id, webhook_id=webhook.id, cursor=0)
-        refresh_tables(base, base_id, persistence)
+            BasePoller(base_id, base_config, persistence).initialize(url)
 
 
 async def run_polling_loop(config: Config) -> None:
@@ -256,12 +258,15 @@ async def run_polling_loop(config: Config) -> None:
 
         logger.info(f"Starting polling loop for {len(config.bases)} base(s)")
 
+        # Create pollers once so the webhook cache survives across iterations
+        pollers = [
+            BasePoller(base_id, base_config, persistence)
+            for base_id, base_config in config.bases.items()
+        ]
+
         try:
             while True:
-                threads = [
-                    asyncio.to_thread(poll_base, base_id, base_config, persistence)
-                    for base_id, base_config in config.bases.items()
-                ]
+                threads = [asyncio.to_thread(p.poll) for p in pollers]
                 results = await asyncio.gather(*threads, return_exceptions=True)
 
                 for base_id, result in zip(config.bases, results):
