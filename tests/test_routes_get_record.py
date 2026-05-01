@@ -72,3 +72,13 @@ def test_returns_single_record(client_with_data):
     assert data["fields"]["Age"] == 30
     assert data["fields"]["Active"] is True
     assert "records" not in data
+
+
+@pytest.mark.parametrize("table_id_or_name", [TABLE_ID, "Test Table", "Test%20Table"])
+def test_returns_record_by_table_name(client_with_data, table_id_or_name):
+    """The route accepts a table ID or table name (URL-encoded or not)."""
+    client, _ = client_with_data
+    response = client.get(f"/v0/{BASE_ID}/{table_id_or_name}/{REC_1}")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == REC_1
