@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from airtable_proxy.persistence import AirtablePersistence
+from airtable_proxy.persistence import AirtablePersistence, FieldInfo, RecordInfo
 
 
 def is_empty_value(value: Any) -> bool:
@@ -41,3 +41,34 @@ def resolve_table_id(
             return table_id
 
     return None
+
+
+def format_record_fields(
+    record: RecordInfo,
+    field_info: dict[str, FieldInfo],
+    *,
+    return_fields_by_field_id: bool,
+    include_field_ids: set[str] | None = None,
+) -> dict[str, Any]:
+    """
+    Build the `fields` dict for an API response from a stored record.
+
+    Omits empty values (per `is_empty_value`). Keys output by field ID when
+    `return_fields_by_field_id` is true, otherwise by field name (falling back
+    to the field ID if no name is known). When `include_field_ids` is given,
+    only those field IDs are kept.
+    """
+    output: dict[str, Any] = {}
+    for field_id, value in record.fields.items():
+        if include_field_ids is not None and field_id not in include_field_ids:
+            continue
+        if is_empty_value(value):
+            continue
+
+        if return_fields_by_field_id:
+            output[field_id] = value
+        else:
+            info = field_info.get(field_id)
+            output[info.field_name if info is not None else field_id] = value
+
+    return output
