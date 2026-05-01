@@ -37,4 +37,4 @@
 
 - Never use one-line docstrings; always put `"""` on its own line.
 - Avoid massive try/except or try/finally blocks.
--
+- Avoid extraneous or useless try/except blocks. Don't catch `Exception`.

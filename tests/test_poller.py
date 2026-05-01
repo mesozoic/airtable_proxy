@@ -530,21 +530,31 @@ def test_process_payload_destroyed_records(storage):
     assert persist.get_record("appB", "tbl1", "recDel") is None
 
 
-# -- poll_base tests --
+# -- BasePoller tests --
 
 
-def test_poll_base_no_webhook_info(storage):
-    """poll_base returns early when no webhook info is stored."""
+@pytest.fixture
+def base_poller(storage):
+    """
+    A BasePoller instance for "appB" with a fresh persistence layer.
+    """
     persist = AirtablePersistence(storage)
-    base_config = BaseConfig(api_key="patXXX")
-    poller.poll_base("appMissing", base_config, persist)
+    return poller.BasePoller("appB", BaseConfig(api_key=API_KEY), persist)
 
 
-def test_poll_base_processes_payloads(airtable_api, storage):
-    persist = AirtablePersistence(storage)
-    persist.save_webhook("appB", webhook_id="whX", cursor=5)
-    persist.save_table("appB", "tbl1", "Table")
-    persist.save_record("appB", "tbl1", "rec1", fields={"f": "old"}, created_time="t")
+def test_base_poller_poll_no_webhook_info(base_poller):
+    """
+    BasePoller.poll returns early when no webhook info is stored.
+    """
+    base_poller.poll()
+
+
+def test_base_poller_poll_processes_payloads(airtable_api, base_poller):
+    base_poller.persistence.save_webhook("appB", webhook_id="whX", cursor=5)
+    base_poller.persistence.save_table("appB", "tbl1", "Table")
+    base_poller.persistence.save_record(
+        "appB", "tbl1", "rec1", fields={"f": "old"}, created_time="t"
+    )
 
     airtable_api.mock_list_webhooks("appB", [airtable_api.webhook_json("whX")])
     airtable_api.mock_webhook_payloads(
@@ -571,31 +581,38 @@ def test_poll_base_processes_payloads(airtable_api, storage):
         cursor=6,
     )
 
-    base_config = BaseConfig(api_key=API_KEY)
-    poller.poll_base("appB", base_config, persist)
+    base_poller.poll()
 
-    assert persist.get_record("appB", "tbl1", "rec1").fields["f"] == "new"
-    assert persist.get_webhook("appB").cursor == 6
-
-
-# -- initialize_base with existing webhook --
+    assert base_poller.persistence.get_record("appB", "tbl1", "rec1").fields["f"] == "new"
+    assert base_poller.persistence.get_webhook("appB").cursor == 6
 
 
-def test_initialize_base_existing_webhook_polls(airtable_api, storage):
-    persist = AirtablePersistence(storage)
-    persist.save_webhook("appB", webhook_id="whExist", cursor=3)
+def test_base_poller_webhook_is_cached(airtable_api, base_poller):
+    """
+    Calling poll() twice only fetches the webhook object once.
+    """
+    base_poller.persistence.save_webhook("appB", webhook_id="whX", cursor=0)
+
+    airtable_api.mock_list_webhooks("appB", [airtable_api.webhook_json("whX")])
+    airtable_api.mock_webhook_payloads("appB", "whX", [], cursor=0)
+
+    base_poller.poll()
+    base_poller.poll()
+
+    webhook_gets = [
+        r for r in airtable_api.request_history if r.method == "GET" and r.path.endswith("/webhooks")
+    ]
+    assert len(webhook_gets) == 1
+
+
+def test_base_poller_initialize_existing_webhook_polls(airtable_api, base_poller):
+    base_poller.persistence.save_webhook("appB", webhook_id="whExist", cursor=3)
 
     airtable_api.mock_whoami()
     airtable_api.mock_list_webhooks("appB", [airtable_api.webhook_json("whExist")])
     airtable_api.mock_webhook_payloads("appB", "whExist", [], cursor=3)
 
-    base_config = BaseConfig(api_key=API_KEY)
-    poller.initialize_base(
-        callback_url="https://example.com/webhooks/appB",
-        base_id="appB",
-        base_config=base_config,
-        persistence=persist,
-    )
+    base_poller.initialize("https://example.com/webhooks/appB")
 
     assert not any(r.method == "POST" and "webhooks" in r.path for r in airtable_api.request_history)
 
@@ -603,7 +620,8 @@ def test_initialize_base_existing_webhook_polls(airtable_api, storage):
 # -- run_polling_loop tests --
 
 
-def test_run_polling_loop_polls_and_handles_errors(tmp_path):
+@patch("airtable_proxy.poller.BasePoller.poll")
+def test_run_polling_loop_polls_and_handles_errors(mock_poll, tmp_path):
     config = Config.model_validate(
         {
             "hostname": "test.example.com",
@@ -614,11 +632,13 @@ def test_run_polling_loop_polls_and_handles_errors(tmp_path):
 
     call_count = 0
 
-    def fake_poll_base(base_id, base_config, persist):
+    def fake_poll():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
             raise Exception("transient error")
+
+    mock_poll.side_effect = fake_poll
 
     async def run():
         task = asyncio.create_task(poller.run_polling_loop(config))
@@ -629,8 +649,7 @@ def test_run_polling_loop_polls_and_handles_errors(tmp_path):
         except asyncio.CancelledError:
             pass
 
-    with patch("airtable_proxy.poller.poll_base", side_effect=fake_poll_base):
-        asyncio.run(run())
+    asyncio.run(run())
 
     assert call_count >= 2
 
