@@ -1,5 +1,4 @@
 from unittest.mock import AsyncMock, patch
-import os
 
 import httpx
 from fastapi.testclient import TestClient
