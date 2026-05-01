@@ -2,6 +2,23 @@
 
 This is intended to be a lightweight proxy for the Airtable API which trades data freshness for higher speeds. It uses [webhooks](https://airtable.com/developers/web/api/model/webhooks-payload) to tail all changes to a base's records and update a local cache. As a result, it is limited to certain operations.
 
+## How it works
+
+The poller subscribes to Airtable webhooks and tails change payloads into a local SQLite cache. The web server reads from that cache to serve client requests, and falls through to the Airtable API for anything it can't satisfy locally.
+
+```mermaid
+flowchart LR
+    Client -->|HTTP| Server
+    subgraph proxy [airtable_proxy]
+        Server[Web server]
+        Poller
+    end
+    Server -->|read| DB[(SQLite cache)]
+    Server -.->|fallback| Airtable[(Airtable API)]
+    Poller -->|poll webhooks| Airtable
+    Poller -->|write changes| DB
+```
+
 ## Dependencies
 
 This library relies on:
