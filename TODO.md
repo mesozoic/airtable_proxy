@@ -18,13 +18,13 @@
         - [x] trigger the "read webhook payloads" job
         - [x] re-run the job every 1s after it completes
 
-- [ ] Authentication
-    - [ ] Use the api_key in the configuration to retrieve records
-    - [ ] Hash the bearer token and check against local storage
-        - [ ] If hash present and allowed, allow access
-        - [ ] If hash not present, check base access by retrieving one record directly from Airtable using the bearer token
-            - [ ] If successful, store hash and allow access
-            - [ ] If not successful, return 403
+- [x] Authentication
+    - [x] Use the api_key in the configuration to retrieve records
+    - [x] Hash the bearer token and check against local storage
+        - [x] If hash present and allowed, allow access
+        - [x] If hash not present, check base access by retrieving one record directly from Airtable using the bearer token
+            - [x] If successful, store hash and allow access
+            - [x] If not successful, return 403
 
 - [x] Local storage for records (start with sqlite3)
     - [x] store records with unique key of `(baseId, tableId, recordId)`
