@@ -66,10 +66,10 @@
     - [x] proxy to Airtable if `cellFormat=string`
     - [x] proxy to Airtable if table is missing from local storage
 
-- [ ] Support [get record](https://airtable.com/developers/web/api/get-record)
-    - [ ] implement `returnFieldsByFieldId`
-    - [ ] proxy to Airtable if `cellFormat=string`
-    - [ ] proxy to Airtable if record is missing from local storage
+- [x] Support [get record](https://airtable.com/developers/web/api/get-record)
+    - [x] implement `returnFieldsByFieldId`
+    - [x] proxy to Airtable if `cellFormat=string`
+    - [x] proxy to Airtable if record is missing from local storage
 
 ## 0.2
 

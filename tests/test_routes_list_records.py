@@ -99,9 +99,7 @@ def test_returns_all_records(client_with_data):
     assert len(data["records"]) == 3
 
 
-@pytest.mark.parametrize(
-    "table_id_or_name", [TABLE_ID, "Test Table", "Test%20Table"]
-)
+@pytest.mark.parametrize("table_id_or_name", [TABLE_ID, "Test Table", "Test%20Table"])
 def test_by_table_name(client_with_data, table_id_or_name):
     """
     List records works when using table name instead of table ID.
@@ -191,9 +189,7 @@ def test_proxy_when_view_param_present(mock_client, client_with_data):
     Proxy to Airtable when view= parameter is present.
     """
     mock_response = httpx.Response(200, json={"records": []})
-    mock_client.return_value.__aenter__ = AsyncMock(
-        return_value=mock_client.return_value
-    )
+    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
     mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
     mock_client.return_value.request = AsyncMock(return_value=mock_response)
 
@@ -210,9 +206,7 @@ def test_proxy_when_filter_by_formula_present(mock_client, client_with_data):
     Proxy to Airtable when filterByFormula= parameter is present.
     """
     mock_response = httpx.Response(200, json={"records": []})
-    mock_client.return_value.__aenter__ = AsyncMock(
-        return_value=mock_client.return_value
-    )
+    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
     mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
     mock_client.return_value.request = AsyncMock(return_value=mock_response)
 
@@ -229,9 +223,7 @@ def test_proxy_when_cell_format_string(mock_client, client_with_data):
     Proxy to Airtable when cellFormat=string.
     """
     mock_response = httpx.Response(200, json={"records": []})
-    mock_client.return_value.__aenter__ = AsyncMock(
-        return_value=mock_client.return_value
-    )
+    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
     mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
     mock_client.return_value.request = AsyncMock(return_value=mock_response)
 
@@ -248,9 +240,7 @@ def test_proxy_when_table_not_in_local_storage(mock_client, test_app):
     Proxy to Airtable when the table is not in local storage.
     """
     mock_response = httpx.Response(200, json={"records": []})
-    mock_client.return_value.__aenter__ = AsyncMock(
-        return_value=mock_client.return_value
-    )
+    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
     mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
     mock_client.return_value.request = AsyncMock(return_value=mock_response)
 
