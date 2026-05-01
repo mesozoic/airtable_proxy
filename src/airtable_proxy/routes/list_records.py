@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import FastAPI, Query, Request
 
+from airtable_proxy.auth import require_auth
 from airtable_proxy.persistence import AirtablePersistence
 from airtable_proxy.proxy import ProxyRequest
 from airtable_proxy.util import format_record_fields, resolve_table_id
@@ -17,7 +18,7 @@ def add_routes(app: FastAPI) -> None:
     """
 
     @app.get("/v0/{base_id}/{table_id_or_name}")
-    def list_records(
+    async def list_records(
         request: Request,
         base_id: str,
         table_id_or_name: str,
@@ -44,6 +45,8 @@ def add_routes(app: FastAPI) -> None:
         table_id = resolve_table_id(base_id, table_id_or_name, persistence)
         if table_id is None:
             raise ProxyRequest()
+
+        await require_auth(request, base_id, persistence)
 
         field_info = persistence.get_fields(base_id, table_id)
         field_name_to_id = {info.field_name: fid for fid, info in field_info.items()}
