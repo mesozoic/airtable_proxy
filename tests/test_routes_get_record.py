@@ -1,5 +1,8 @@
 """Tests for the get record endpoint."""
 
+from unittest.mock import AsyncMock, patch
+
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from pyairtable.testing import fake_id
@@ -121,3 +124,49 @@ def test_omits_empty_values(client_with_data):
 
     assert response.status_code == 200
     assert response.json()["fields"] == {}
+
+
+@patch("airtable_proxy.proxy.httpx.AsyncClient")
+def test_proxy_when_cell_format_string(mock_client, client_with_data):
+    """cellFormat=string forces a proxy to Airtable."""
+    mock_response = httpx.Response(200, json={"id": REC_1, "fields": {}, "createdTime": "x"})
+    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+    mock_client.return_value.request = AsyncMock(return_value=mock_response)
+
+    client, _ = client_with_data
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}/{REC_1}?cellFormat=string")
+
+    assert response.status_code == 200
+    mock_client.return_value.request.assert_called_once()
+
+
+@patch("airtable_proxy.proxy.httpx.AsyncClient")
+def test_proxy_when_table_not_in_local_storage(mock_client, test_app):
+    """A table not in local storage falls through to the proxy."""
+    mock_response = httpx.Response(200, json={"id": REC_1, "fields": {}, "createdTime": "x"})
+    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+    mock_client.return_value.request = AsyncMock(return_value=mock_response)
+
+    with TestClient(test_app) as client:
+        response = client.get(f"/v0/{BASE_ID}/UnknownTable/{REC_1}")
+
+    assert response.status_code == 200
+    mock_client.return_value.request.assert_called_once()
+
+
+@patch("airtable_proxy.proxy.httpx.AsyncClient")
+def test_proxy_when_record_not_in_local_storage(mock_client, client_with_data):
+    """A record not in local storage falls through to the proxy."""
+    mock_response = httpx.Response(200, json={"id": "recMissing", "fields": {}, "createdTime": "x"})
+    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+    mock_client.return_value.request = AsyncMock(return_value=mock_response)
+
+    client, _ = client_with_data
+    missing = fake_id("rec")
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}/{missing}")
+
+    assert response.status_code == 200
+    mock_client.return_value.request.assert_called_once()
