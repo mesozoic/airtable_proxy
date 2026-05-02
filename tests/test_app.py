@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from airtable_proxy import app
@@ -103,17 +104,26 @@ def test_create_app_loads_config_from_env(tmp_path):
         assert response.status_code == 200
 
 
-def test_proxy_forwards_error_responses(httpx_mock, tmp_path):
+@pytest.mark.parametrize(
+    "status_code, error_type",
+    [
+        (401, "AUTHENTICATION_REQUIRED"),
+        (403, "INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND"),
+        (404, "NOT_FOUND"),
+        (500, "INTERNAL_SERVER_ERROR"),
+    ],
+)
+def test_proxy_forwards_error_responses(httpx_mock, tmp_path, status_code, error_type):
     """Test that error responses from Airtable are forwarded correctly."""
     application = app.create_app(config=make_config(tmp_path))
 
     httpx_mock.add_response(
-        status_code=401,
-        json={"error": {"type": "AUTHENTICATION_REQUIRED"}},
+        status_code=status_code,
+        json={"error": {"type": error_type}},
     )
 
     with TestClient(application) as client:
         response = client.get("/v0/appXXX/TableName")
 
-    assert response.status_code == 401
-    assert response.json()["error"]["type"] == "AUTHENTICATION_REQUIRED"
+    assert response.status_code == status_code
+    assert response.json()["error"]["type"] == error_type
