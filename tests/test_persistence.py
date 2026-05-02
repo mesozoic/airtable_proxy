@@ -1,13 +1,4 @@
-import pytest
-
-from airtable_proxy import persistence
 from airtable_proxy.persistence import FieldInfo, RecordInfo, TableInfo, WebhookInfo
-
-
-@pytest.fixture
-def persist(storage):
-    return persistence.AirtablePersistence(storage)
-
 
 # Webhook tests
 
@@ -118,3 +109,20 @@ def test_delete_field(persist):
     persist.save_field("appBase1", "tbl1", "fld1", field_name="Name", field_type="text")
     persist.delete_field("appBase1", "tbl1", "fld1")
     assert persist.get_field("appBase1", "tbl1", "fld1") is None
+
+
+# Auth tests
+
+
+def test_has_auth_returns_false_when_missing(persist):
+    assert persist.has_auth("appBase1", "somehash") is False
+
+
+def test_save_and_has_auth(persist):
+    persist.save_auth("appBase1", "somehash")
+    assert persist.has_auth("appBase1", "somehash") is True
+
+
+def test_auth_is_scoped_to_base(persist):
+    persist.save_auth("appBase1", "somehash")
+    assert persist.has_auth("appBase2", "somehash") is False
