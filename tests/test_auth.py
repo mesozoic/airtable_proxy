@@ -2,9 +2,6 @@
 Tests for bearer token authentication.
 """
 
-from unittest.mock import AsyncMock, patch
-
-import httpx
 from fastapi import Request
 from fastapi.testclient import TestClient
 
@@ -32,18 +29,14 @@ def test_allow_when_hash_found(persist, auth_app):
     assert response.status_code == 200
 
 
-@patch("airtable_proxy.auth.httpx.AsyncClient")
-def test_allow_and_cache_on_airtable_success(mock_client, persist, auth_app):
+def test_allow_and_cache_on_airtable_success(httpx_mock, persist, auth_app):
     """
     Unknown tokens are verified against Airtable.
     On success, the hash is stored and the request is allowed.
     """
     persist.save_table(BASE_ID, TABLE_ID, "Test Table")
 
-    mock_response = httpx.Response(200, json={"records": []})
-    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-    mock_client.return_value.get = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(json={"records": []}, status_code=200)
 
     with TestClient(auth_app) as client:
         response = client.get(
@@ -55,17 +48,13 @@ def test_allow_and_cache_on_airtable_success(mock_client, persist, auth_app):
     assert persist.has_auth(BASE_ID, TOKEN_HASH)
 
 
-@patch("airtable_proxy.auth.httpx.AsyncClient")
-def test_deny_on_airtable_failure(mock_client, persist, auth_app):
+def test_deny_on_airtable_failure(httpx_mock, persist, auth_app):
     """
     Unknown tokens that fail Airtable verification return 403.
     """
     persist.save_table(BASE_ID, TABLE_ID, "Test Table")
 
-    mock_response = httpx.Response(401, json={"error": {"type": "AUTHENTICATION_REQUIRED"}})
-    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-    mock_client.return_value.get = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(json={"error": {"type": "AUTHENTICATION_REQUIRED"}}, status_code=401)
 
     with TestClient(auth_app) as client:
         response = client.get(

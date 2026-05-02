@@ -2,9 +2,6 @@
 Tests for the list records endpoint.
 """
 
-from unittest.mock import AsyncMock, patch
-
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 from pyairtable.testing import fake_id
@@ -188,73 +185,57 @@ def test_omits_empty_list_values(client_with_data):
 # Proxy condition tests
 
 
-@patch("airtable_proxy.proxy.httpx.AsyncClient")
-def test_proxy_when_view_param_present(mock_client, client_with_data):
+def test_proxy_when_view_param_present(httpx_mock, client_with_data):
     """
     Proxy to Airtable when view= parameter is present.
     """
-    mock_response = httpx.Response(200, json={"records": []})
-    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-    mock_client.return_value.request = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(json={"records": []})
 
     client, _ = client_with_data
     response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}?view=Grid%20view")
 
     assert response.status_code == 200
-    mock_client.return_value.request.assert_called_once()
+    assert len(httpx_mock.get_requests()) == 1
 
 
-@patch("airtable_proxy.proxy.httpx.AsyncClient")
-def test_proxy_when_filter_by_formula_present(mock_client, client_with_data):
+def test_proxy_when_filter_by_formula_present(httpx_mock, client_with_data):
     """
     Proxy to Airtable when filterByFormula= parameter is present.
     """
-    mock_response = httpx.Response(200, json={"records": []})
-    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-    mock_client.return_value.request = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(json={"records": []})
 
     client, _ = client_with_data
     response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}?filterByFormula={{Name}}='Alice'")
 
     assert response.status_code == 200
-    mock_client.return_value.request.assert_called_once()
+    assert len(httpx_mock.get_requests()) == 1
 
 
-@patch("airtable_proxy.proxy.httpx.AsyncClient")
-def test_proxy_when_cell_format_string(mock_client, client_with_data):
+def test_proxy_when_cell_format_string(httpx_mock, client_with_data):
     """
     Proxy to Airtable when cellFormat=string.
     """
-    mock_response = httpx.Response(200, json={"records": []})
-    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-    mock_client.return_value.request = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(json={"records": []})
 
     client, _ = client_with_data
     response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}?cellFormat=string")
 
     assert response.status_code == 200
-    mock_client.return_value.request.assert_called_once()
+    assert len(httpx_mock.get_requests()) == 1
 
 
-@patch("airtable_proxy.proxy.httpx.AsyncClient")
-def test_proxy_when_table_not_in_local_storage(mock_client, test_app):
+def test_proxy_when_table_not_in_local_storage(httpx_mock, test_app):
     """
     Proxy to Airtable when the table is not in local storage.
     """
-    mock_response = httpx.Response(200, json={"records": []})
-    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-    mock_client.return_value.request = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(json={"records": []})
 
     with TestClient(test_app) as client:
         # No test data - table doesn't exist
         response = client.get(f"/v0/{BASE_ID}/UnknownTable")
 
     assert response.status_code == 200
-    mock_client.return_value.request.assert_called_once()
+    assert len(httpx_mock.get_requests()) == 1
 
 
 # maxRecords tests
@@ -356,18 +337,14 @@ def test_returns_401_without_auth_header(client_with_data):
     assert response.status_code == 401
 
 
-def test_returns_403_with_invalid_token(client_with_data):
+def test_returns_403_with_invalid_token(httpx_mock, client_with_data):
     """Requests with an unknown token that fails Airtable verification return 403."""
-    client, _ = client_with_data
-    with patch("airtable_proxy.auth.httpx.AsyncClient") as mock_client:
-        mock_response = httpx.Response(401, json={"error": {}})
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-        mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-        mock_client.return_value.get = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(status_code=401)
 
-        response = client.get(
-            f"/v0/{BASE_ID}/{TABLE_ID}",
-            headers={"Authorization": "Bearer patBadToken.invalid"},
-        )
+    client, _ = client_with_data
+    response = client.get(
+        f"/v0/{BASE_ID}/{TABLE_ID}",
+        headers={"Authorization": "Bearer patBadToken.invalid"},
+    )
 
     assert response.status_code == 403

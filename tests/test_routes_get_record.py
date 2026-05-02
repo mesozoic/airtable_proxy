@@ -1,8 +1,5 @@
 """Tests for the get record endpoint."""
 
-from unittest.mock import AsyncMock, patch
-
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 from pyairtable.testing import fake_id
@@ -133,13 +130,9 @@ def test_omits_empty_values(client_with_data):
     assert response.json()["fields"] == {}
 
 
-@patch("airtable_proxy.proxy.httpx.AsyncClient")
-def test_proxy_when_cell_format_string(mock_client, client_with_data):
+def test_proxy_when_cell_format_string(httpx_mock, client_with_data):
     """cellFormat=string forces a proxy to Airtable."""
-    mock_response = httpx.Response(200, json={"id": REC_1, "fields": {}, "createdTime": "x"})
-    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-    mock_client.return_value.request = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(json={"id": REC_1, "fields": {}, "createdTime": "x"})
 
     client, _ = client_with_data
     response = client.get(
@@ -147,38 +140,30 @@ def test_proxy_when_cell_format_string(mock_client, client_with_data):
     )
 
     assert response.status_code == 200
-    mock_client.return_value.request.assert_called_once()
+    assert len(httpx_mock.get_requests()) == 1
 
 
-@patch("airtable_proxy.proxy.httpx.AsyncClient")
-def test_proxy_when_table_not_in_local_storage(mock_client, test_app):
+def test_proxy_when_table_not_in_local_storage(httpx_mock, test_app):
     """A table not in local storage falls through to the proxy."""
-    mock_response = httpx.Response(200, json={"id": REC_1, "fields": {}, "createdTime": "x"})
-    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-    mock_client.return_value.request = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(json={"id": REC_1, "fields": {}, "createdTime": "x"})
 
     with TestClient(test_app) as client:
         response = client.get(f"/v0/{BASE_ID}/UnknownTable/{REC_1}", headers=AUTH_HEADERS)
 
     assert response.status_code == 200
-    mock_client.return_value.request.assert_called_once()
+    assert len(httpx_mock.get_requests()) == 1
 
 
-@patch("airtable_proxy.proxy.httpx.AsyncClient")
-def test_proxy_when_record_not_in_local_storage(mock_client, client_with_data):
+def test_proxy_when_record_not_in_local_storage(httpx_mock, client_with_data):
     """A record not in local storage falls through to the proxy."""
-    mock_response = httpx.Response(200, json={"id": "recMissing", "fields": {}, "createdTime": "x"})
-    mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-    mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-    mock_client.return_value.request = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(json={"id": "recMissing", "fields": {}, "createdTime": "x"})
 
     client, _ = client_with_data
     missing = fake_id("rec")
     response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}/{missing}", headers=AUTH_HEADERS)
 
     assert response.status_code == 200
-    mock_client.return_value.request.assert_called_once()
+    assert len(httpx_mock.get_requests()) == 1
 
 
 # Authentication tests
@@ -191,18 +176,14 @@ def test_returns_401_without_auth_header(client_with_data):
     assert response.status_code == 401
 
 
-def test_returns_403_with_invalid_token(client_with_data):
+def test_returns_403_with_invalid_token(httpx_mock, client_with_data):
     """Requests with an unknown token that fails Airtable verification return 403."""
-    client, _ = client_with_data
-    with patch("airtable_proxy.auth.httpx.AsyncClient") as mock_client:
-        mock_response = httpx.Response(401, json={"error": {}})
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
-        mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-        mock_client.return_value.get = AsyncMock(return_value=mock_response)
+    httpx_mock.add_response(status_code=401)
 
-        response = client.get(
-            f"/v0/{BASE_ID}/{TABLE_ID}/{REC_1}",
-            headers={"Authorization": "Bearer patBadToken.invalid"},
-        )
+    client, _ = client_with_data
+    response = client.get(
+        f"/v0/{BASE_ID}/{TABLE_ID}/{REC_1}",
+        headers={"Authorization": "Bearer patBadToken.invalid"},
+    )
 
     assert response.status_code == 403
