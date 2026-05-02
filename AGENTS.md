@@ -15,7 +15,7 @@
 # Application structure
 
 - Avoid overcomplication or YAGNI layers of abstraction.
-- Use type annotations everywhere.
+- Use type annotations everywhere, but don't run mypy against test code.
 
 # Testing best practices
 

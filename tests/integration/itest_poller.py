@@ -46,8 +46,8 @@ def test_poll_base(
     alice_id, bob_id = record_cleanup
 
     # Poll and verify records were synced
-    base_config = BaseConfig(api_key=api_key)
-    poller.poll_base(base_id, base_config, persist)
+    base_poller = poller.BasePoller(base_id, BaseConfig(api_key=api_key), persist)
+    base_poller.poll()
 
     for record_id in record_cleanup:
         synced = persist.get_record(base_id, table.id, record_id)
@@ -60,7 +60,7 @@ def test_poll_base(
 
     # Update a record and verify sync (fields are stored by field ID)
     table.update(alice_id, {"text": "Alice Updated"})
-    poller.poll_base(base_id, base_config, persist)
+    base_poller.poll()
     updated = persist.get_record(base_id, table.id, alice_id)
     assert updated is not None
     assert updated.fields.get(text_field_id) == "Alice Updated"
@@ -68,6 +68,6 @@ def test_poll_base(
     # Delete a record and verify sync
     table.delete(bob_id)
     record_cleanup.remove(bob_id)
-    poller.poll_base(base_id, base_config, persist)
+    base_poller.poll()
     deleted = persist.get_record(base_id, table.id, bob_id)
     assert deleted is None, "Deleted record should be removed from persistence"

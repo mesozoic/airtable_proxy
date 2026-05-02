@@ -185,7 +185,7 @@ class BasePoller:
         self.base_id = base_id
         self.base_config = base_config
         self.persistence = persistence
-        self._webhook = None  # Cached webhook handle
+        self._webhook: Webhook | None = None  # Cached webhook handle
 
     def poll(self) -> None:
         """Poll the base for webhook payloads and process them."""
