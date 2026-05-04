@@ -71,11 +71,6 @@ def refresh_tables(base: Base, base_id: str, persistence: AirtablePersistence) -
 
 def process_payload(payload: WebhookPayload, base_id: str, persistence: AirtablePersistence) -> None:
     """Process a single webhook payload and update local storage."""
-    # Handle destroyed tables
-    for table_id in payload.destroyed_table_ids:
-        logger.debug(f"Deleted table {table_id} from base {base_id}")
-        persistence.delete_table(base_id, table_id)
-
     # Handle created tables
     for table_id, table_created in payload.created_tables_by_id.items():
         table_name = table_created.metadata.name if table_created.metadata else table_id
@@ -182,6 +177,11 @@ def process_payload(payload: WebhookPayload, base_id: str, persistence: Airtable
                 table_id=table_id,
                 record_id=record_id,
             )
+
+    # Handle destroyed tables
+    for table_id in payload.destroyed_table_ids:
+        logger.debug(f"Deleted table {table_id} from base {base_id}")
+        persistence.delete_table(base_id, table_id)
 
 
 class BasePoller:
