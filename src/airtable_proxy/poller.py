@@ -1,12 +1,20 @@
 import asyncio
 import logging
+import sys
 from typing import Any
 
 import click
 from pyairtable import Api, Base
 from pyairtable.models.webhook import Webhook, WebhookPayload
 
-from airtable_proxy.config import BaseConfig, Config, load_config, load_config_from_file
+from airtable_proxy.config import (
+    BaseConfig,
+    Config,
+    ConfigNotFoundError,
+    load_config,
+    load_config_from_file,
+    resolve_config_path,
+)
 from airtable_proxy.persistence import AirtablePersistence
 from airtable_proxy.storage import Storage
 
@@ -279,17 +287,25 @@ async def run_polling_loop(config: Config) -> None:
 
 
 @click.command()
-@click.argument("config", type=click.Path(exists=True))
+@click.argument("config", type=click.Path(), required=False)
 @click.option("--once", is_flag=True, help="Run once and exit (for testing)")
-def main(config: str, once: bool = False) -> None:
+def main(config: str | None = None, once: bool = False) -> None:
     """
     Initialize and poll Airtable webhooks.
+
+    If CONFIG is omitted, looks for AIRTABLE_PROXY_CONFIG, then ./config.yaml.
     """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    cfg = load_config_from_file(config)
+    try:
+        config_path = resolve_config_path(config)
+    except ConfigNotFoundError as exc:
+        click.echo(str(exc), err=True)
+        sys.exit(1)
+
+    cfg = load_config_from_file(config_path)
     initialize(cfg)
 
     if not once:

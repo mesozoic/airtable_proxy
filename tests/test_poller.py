@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from pyairtable import Api
@@ -658,11 +658,11 @@ def test_run_polling_loop_polls_and_handles_errors(mock_poll, tmp_path):
 
 
 @patch("airtable_proxy.poller.initialize")
-@patch("airtable_proxy.poller.load_config_from_file")
-def test_main_once(mock_load, mock_init, tmp_path):
+def test_main_once(mock_init, tmp_path):
     config_file = tmp_path / "config.yaml"
-    config_file.write_text("hostname: test\nbases: {}\nstorage:\n  sqlite: /tmp/test.db\n")
-    mock_load.return_value = MagicMock()
+    config_file.write_text(
+        f"hostname: test.example.com\nbases: {{}}\nstorage:\n  sqlite: {tmp_path / 'test.db'}\n"
+    )
 
     from click.testing import CliRunner
 
@@ -673,12 +673,12 @@ def test_main_once(mock_load, mock_init, tmp_path):
 
 
 @patch("airtable_proxy.poller.asyncio.run")
-@patch("airtable_proxy.poller.load_config_from_file")
 @patch("airtable_proxy.poller.initialize")
-def test_main_without_once_runs_polling(_mock_init, mock_load, mock_asyncio_run, tmp_path):
+def test_main_without_once_runs_polling(_mock_init, mock_asyncio_run, tmp_path):
     config_file = tmp_path / "config.yaml"
-    config_file.write_text("hostname: test\nbases: {}\nstorage:\n  sqlite: /tmp/test.db\n")
-    mock_load.return_value = MagicMock()
+    config_file.write_text(
+        f"hostname: test.example.com\nbases: {{}}\nstorage:\n  sqlite: {tmp_path / 'test.db'}\n"
+    )
 
     from click.testing import CliRunner
 
@@ -686,5 +686,57 @@ def test_main_without_once_runs_polling(_mock_init, mock_load, mock_asyncio_run,
     result = runner.invoke(poller.main, [str(config_file)])
     assert result.exit_code == 0
     mock_asyncio_run.assert_called_once()
-    # Close the coroutine to avoid "was never awaited" warning
     mock_asyncio_run.call_args[0][0].close()
+
+
+@patch("airtable_proxy.poller.initialize")
+def test_main_uses_explicit_config_arg(mock_init, tmp_path):
+    config_file = tmp_path / "explicit.yaml"
+    config_file.write_text("hostname: test.example.com\nbases: {}\n")
+
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    result = runner.invoke(poller.main, [str(config_file), "--once"])
+    assert result.exit_code == 0
+    mock_init.assert_called_once()
+
+
+@patch("airtable_proxy.poller.initialize")
+def test_main_uses_env_var_when_no_arg(mock_init, tmp_path, monkeypatch):
+    config_file = tmp_path / "from-env.yaml"
+    config_file.write_text("hostname: test.example.com\nbases: {}\n")
+    monkeypatch.setenv("AIRTABLE_PROXY_CONFIG", str(config_file))
+
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    result = runner.invoke(poller.main, ["--once"])
+    assert result.exit_code == 0
+    mock_init.assert_called_once()
+
+
+@patch("airtable_proxy.poller.initialize")
+def test_main_falls_back_to_default_config_yaml(mock_init, tmp_path, monkeypatch):
+    monkeypatch.delenv("AIRTABLE_PROXY_CONFIG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text("hostname: test.example.com\nbases: {}\n")
+
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    result = runner.invoke(poller.main, ["--once"])
+    assert result.exit_code == 0
+    mock_init.assert_called_once()
+
+
+def test_main_friendly_error_when_config_missing(tmp_path, monkeypatch):
+    monkeypatch.delenv("AIRTABLE_PROXY_CONFIG", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    result = runner.invoke(poller.main, [])
+    assert result.exit_code == 1
+    assert "config.yaml.example" in result.output
