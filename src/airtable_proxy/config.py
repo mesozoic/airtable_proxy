@@ -7,6 +7,36 @@ import yaml
 from pydantic import BaseModel, Field, field_validator
 
 
+class ConfigNotFoundError(FileNotFoundError):
+    """
+    Raised when the config file cannot be located.
+    """
+
+
+def resolve_config_path(explicit: Path | str | None) -> Path:
+    """
+    Resolve the config file path.
+
+    Precedence: explicit argument, then ``AIRTABLE_PROXY_CONFIG`` env var,
+    then ``./config.yaml``. Raises ``ConfigNotFoundError`` if the resolved
+    path does not exist.
+    """
+    if explicit is not None:
+        path = Path(explicit)
+    elif env_path := os.environ.get("AIRTABLE_PROXY_CONFIG"):
+        path = Path(env_path)
+    else:
+        path = Path("config.yaml")
+
+    if not path.exists():
+        raise ConfigNotFoundError(
+            f"Config file not found at '{path}'. "
+            f"Copy config.yaml.example to get started, or set "
+            f"AIRTABLE_PROXY_CONFIG to point at your config file."
+        )
+    return path
+
+
 class BaseConfig(BaseModel):
     api_key: str = Field(default="env", validate_default=True)
 

@@ -98,3 +98,51 @@ bases:
 
     assert cfg.hostname == "airtable-proxy.example.com"
     assert cfg.bases["appCRvRn3LxhzqYUZ"].api_key == "patCRvRn3LxhzqYUZ.secret"
+
+
+def test_resolve_config_path_explicit(tmp_path):
+    explicit = tmp_path / "explicit.yaml"
+    explicit.write_text("hostname: x\n")
+    assert config.resolve_config_path(explicit) == explicit
+
+
+def test_resolve_config_path_explicit_str(tmp_path):
+    explicit = tmp_path / "explicit.yaml"
+    explicit.write_text("hostname: x\n")
+    assert config.resolve_config_path(str(explicit)) == explicit
+
+
+def test_resolve_config_path_env_var(tmp_path, monkeypatch):
+    target = tmp_path / "from-env.yaml"
+    target.write_text("hostname: x\n")
+    monkeypatch.setenv("AIRTABLE_PROXY_CONFIG", str(target))
+    assert config.resolve_config_path(None) == target
+
+
+def test_resolve_config_path_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("AIRTABLE_PROXY_CONFIG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text("hostname: x\n")
+    assert config.resolve_config_path(None) == Path("config.yaml")
+
+
+def test_resolve_config_path_missing_raises(tmp_path, monkeypatch):
+    monkeypatch.delenv("AIRTABLE_PROXY_CONFIG", raising=False)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(config.ConfigNotFoundError) as exc_info:
+        config.resolve_config_path(None)
+    msg = str(exc_info.value)
+    assert "config.yaml" in msg
+    assert "config.yaml.example" in msg
+    assert "AIRTABLE_PROXY_CONFIG" in msg
+
+
+def test_resolve_config_path_explicit_missing_raises(tmp_path):
+    missing = tmp_path / "nope.yaml"
+    with pytest.raises(config.ConfigNotFoundError) as exc_info:
+        config.resolve_config_path(missing)
+    assert str(missing) in str(exc_info.value)
+
+
+def test_config_not_found_error_is_filenotfounderror():
+    assert issubclass(config.ConfigNotFoundError, FileNotFoundError)
