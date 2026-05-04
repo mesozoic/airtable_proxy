@@ -1,21 +1,48 @@
+import asyncio
 import sys
-from pathlib import Path
 
+import click
 import uvicorn
 
+from airtable_proxy import poller
 from airtable_proxy.app import create_app
-from airtable_proxy.config import load_config_from_file
+from airtable_proxy.config import (
+    Config,
+    ConfigNotFoundError,
+    load_config_from_file,
+    resolve_config_path,
+)
+from airtable_proxy.poller import run_polling_loop
 
 
-def main() -> None:
-    if len(sys.argv) < 2:
-        print("Usage: python -m airtable_proxy <config.yaml>")
+async def serve_and_poll(cfg: Config) -> None:
+    """
+    Run the API server and the polling loop concurrently in one event loop.
+    """
+    app = create_app(cfg)
+    server = uvicorn.Server(uvicorn.Config(app, host="0.0.0.0", port=8000))
+    await asyncio.gather(server.serve(), run_polling_loop(cfg))
+
+
+@click.command()
+@click.argument("config", type=click.Path(), required=False)
+def main(config: str | None = None) -> None:
+    """
+    Run the airtable_proxy API server and poller together.
+
+    If CONFIG is omitted, looks for AIRTABLE_PROXY_CONFIG, then ./config.yaml.
+    For finer control, run airtable_proxy.server and airtable_proxy.poller
+    as separate processes.
+    """
+    try:
+        config_path = resolve_config_path(config)
+    except ConfigNotFoundError as exc:
+        click.echo(str(exc), err=True)
         sys.exit(1)
 
-    config_path = Path(sys.argv[1])
-    config = load_config_from_file(config_path)
-    app = create_app(config)
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    cfg = load_config_from_file(config_path)
+    poller.initialize(cfg)
+    asyncio.run(serve_and_poll(cfg))
 
 
 if __name__ == "__main__":
