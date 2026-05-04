@@ -61,7 +61,7 @@ class StorageConfig(BaseModel):
 
 class Config(BaseModel):
     hostname: str
-    bases: dict[str, BaseConfig]
+    bases: dict[str, BaseConfig] = {}
     storage: StorageConfig = StorageConfig()
 
 

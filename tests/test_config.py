@@ -33,10 +33,9 @@ def test_load_config_missing_hostname():
     assert "hostname" in str(exc_info.value)
 
 
-def test_load_config_missing_bases():
-    with pytest.raises(ValidationError) as exc_info:
-        config.load_config({"hostname": "airtable-proxy.example.com"})
-    assert "bases" in str(exc_info.value)
+def test_load_config_bases_defaults_to_empty():
+    cfg = config.load_config({"hostname": "airtable-proxy.example.com"})
+    assert cfg.bases == {}
 
 
 def test_load_config_api_key_from_default_env(monkeypatch):
