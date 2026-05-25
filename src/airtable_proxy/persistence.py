@@ -82,13 +82,13 @@ class AirtablePersistence:
 
     def delete_table(self, base_id: str, table_id: str) -> None:
         """Delete a table and all its fields and records."""
+        self._storage.delete(TableInfo.key(base_id, table_id))
         for prefix in [
             FieldInfo.prefix(base_id, table_id),
             RecordInfo.prefix(base_id, table_id),
         ]:
             for key in list(self._storage.keys(prefix)):
                 self._storage.delete(key)
-        self._storage.delete(TableInfo.key(base_id, table_id))
 
     def get_tables(self, base_id: str) -> dict[str, TableInfo]:
         prefix = TableInfo.prefix(base_id)
