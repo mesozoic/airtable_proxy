@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, Response
 from airtable_proxy.config import Config, load_config_from_file
 from airtable_proxy.persistence import AirtablePersistence
 from airtable_proxy.proxy import ProxyRequest, proxy_to_airtable
-from airtable_proxy.routes import get_record, list_records
+from airtable_proxy.routes import create_records, get_record, list_records
 from airtable_proxy.storage import Storage
 
 
@@ -45,6 +45,7 @@ def create_app(config: Config | None = None) -> FastAPI:
 
     list_records.add_routes(app)
     get_record.add_routes(app)
+    create_records.add_routes(app)
 
     @app.exception_handler(ProxyRequest)
     async def handle_proxy_request(request: Request, _exc: ProxyRequest) -> Response:
