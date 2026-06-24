@@ -79,6 +79,12 @@ def test_patch_then_cache_reflects_update(api_key, api, base_id, tmp_path, recor
             json={"fields": {"number": 99}},
         )
         assert patch_resp.status_code == 200, patch_resp.text
+        patch_body = patch_resp.json()
+        assert patch_body["fields"].get("text") == "ItestAlice", (
+            "Airtable PATCH response should include unmodified field — "
+            "design assumption violated; see docs/plans/2026-06-23-cache-writes-design.md"
+        )
+        assert patch_body["fields"].get("number") == 99
 
         cached = persistence.get_record(base_id, table_id, rec_id)
         assert cached is not None, "Record should still be in cache after PATCH"
