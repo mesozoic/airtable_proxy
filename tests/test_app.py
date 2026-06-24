@@ -121,6 +121,23 @@ def test_create_app_loads_config_from_env(tmp_path):
         assert response.status_code == 200
 
 
+def test_proxy_meta_request_uses_catchall(httpx_mock, tmp_path):
+    """Test that paths with depth != 2 or 3 go through the catch-all (proxy_v0)."""
+    application = app.create_app(config=make_config(tmp_path))
+
+    httpx_mock.add_response(json={"bases": []})
+
+    with TestClient(application) as client:
+        response = client.get(
+            "/v0/meta/bases/tblXXX/fields",
+            headers={"Authorization": "Bearer patXXX"},
+        )
+
+    assert response.status_code == 200
+    request = httpx_mock.get_request()
+    assert str(request.url).endswith("/v0/meta/bases/tblXXX/fields")
+
+
 @pytest.mark.parametrize(
     "status_code, error_type",
     [
