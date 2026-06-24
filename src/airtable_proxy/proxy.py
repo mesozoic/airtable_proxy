@@ -2,10 +2,15 @@
 Proxy functionality for forwarding requests to the Airtable API.
 """
 
+import logging
+from typing import Any
+
 import httpx
 from fastapi import Request, Response
 
 AIRTABLE_API_BASE = "https://api.airtable.com"
+
+logger = logging.getLogger(__name__)
 
 
 class ProxyRequest(Exception):
@@ -47,6 +52,26 @@ async def forward(request: Request, path: str) -> httpx.Response:
             headers=headers,
             content=body if body else None,
         )
+
+
+def parse_2xx_body(httpx_response: httpx.Response) -> dict[str, Any] | None:
+    """
+    Return Airtable's response body as a dict when the upstream call
+    succeeded with valid JSON; return None otherwise.
+
+    Logs a warning when the response is 2xx but the body cannot be parsed
+    as JSON, so that cache-write failures are visible without raising.
+    """
+    if not (200 <= httpx_response.status_code < 300):
+        return None
+    try:
+        body = httpx_response.json()
+    except ValueError:
+        logger.warning("Airtable response was not JSON; skipping cache update")
+        return None
+    if not isinstance(body, dict):
+        return None
+    return body
 
 
 def response_from_httpx(response: httpx.Response) -> Response:
