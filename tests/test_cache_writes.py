@@ -129,3 +129,112 @@ def test_apply_create_with_unrecognized_body_shape_does_nothing(tmp_path):
     cache_writes.apply_create(persistence, BASE_ID, TABLE_ID, body, response_uses_field_ids=False)
 
     assert persistence.get_records(BASE_ID, TABLE_ID) == {}
+
+
+def test_apply_update_merges_with_existing_record(tmp_path):
+    persistence = make_persistence(tmp_path)
+    persistence.save_record(
+        BASE_ID,
+        TABLE_ID,
+        REC_1,
+        {FLD_NAME: "Alice", FLD_AGE: 30},
+        "2024-01-01T00:00:00.000Z",
+    )
+    body = {
+        "id": REC_1,
+        "createdTime": "2024-01-01T00:00:00.000Z",
+        "fields": {"Age": 31},
+    }
+
+    cache_writes.apply_update(persistence, BASE_ID, TABLE_ID, body, response_uses_field_ids=False)
+
+    stored = persistence.get_record(BASE_ID, TABLE_ID, REC_1)
+    assert stored.fields == {FLD_NAME: "Alice", FLD_AGE: 31}
+    assert stored.created_time == "2024-01-01T00:00:00.000Z"
+
+
+def test_apply_update_replace_clears_unspecified_fields(tmp_path):
+    persistence = make_persistence(tmp_path)
+    persistence.save_record(
+        BASE_ID,
+        TABLE_ID,
+        REC_1,
+        {FLD_NAME: "Alice", FLD_AGE: 30},
+        "2024-01-01T00:00:00.000Z",
+    )
+    body = {
+        "id": REC_1,
+        "createdTime": "2024-01-01T00:00:00.000Z",
+        "fields": {"Name": "Alicia"},
+    }
+
+    cache_writes.apply_update(
+        persistence,
+        BASE_ID,
+        TABLE_ID,
+        body,
+        response_uses_field_ids=False,
+        replace=True,
+    )
+
+    stored = persistence.get_record(BASE_ID, TABLE_ID, REC_1)
+    assert stored.fields == {FLD_NAME: "Alicia"}
+
+
+def test_apply_update_missing_record_is_treated_as_create(tmp_path):
+    persistence = make_persistence(tmp_path)
+    body = {
+        "id": REC_1,
+        "createdTime": "2024-01-01T00:00:00.000Z",
+        "fields": {"Name": "Alice"},
+    }
+
+    cache_writes.apply_update(persistence, BASE_ID, TABLE_ID, body, response_uses_field_ids=False)
+
+    stored = persistence.get_record(BASE_ID, TABLE_ID, REC_1)
+    assert stored.fields == {FLD_NAME: "Alice"}
+
+
+def test_apply_update_multi_record_response_with_upsert_shape(tmp_path):
+    persistence = make_persistence(tmp_path)
+    persistence.save_record(
+        BASE_ID,
+        TABLE_ID,
+        REC_1,
+        {FLD_NAME: "Old"},
+        "2024-01-01T00:00:00.000Z",
+    )
+    body = {
+        "records": [
+            {
+                "id": REC_1,
+                "createdTime": "2024-01-01T00:00:00.000Z",
+                "fields": {"Name": "New"},
+            },
+            {
+                "id": REC_2,
+                "createdTime": "2024-02-01T00:00:00.000Z",
+                "fields": {"Name": "Brand New"},
+            },
+        ],
+        "createdRecords": [REC_2],
+        "updatedRecords": [REC_1],
+    }
+
+    cache_writes.apply_update(persistence, BASE_ID, TABLE_ID, body, response_uses_field_ids=False)
+
+    assert persistence.get_record(BASE_ID, TABLE_ID, REC_1).fields == {FLD_NAME: "New"}
+    assert persistence.get_record(BASE_ID, TABLE_ID, REC_2).fields == {FLD_NAME: "Brand New"}
+
+
+def test_apply_update_with_missing_id_logs_and_skips_record(tmp_path, caplog):
+    persistence = make_persistence(tmp_path)
+    body = {"records": [{"createdTime": "x", "fields": {"Name": "Alice"}}]}
+
+    with caplog.at_level("WARNING", logger="airtable_proxy.cache_writes"):
+        cache_writes.apply_update(
+            persistence, BASE_ID, TABLE_ID, body, response_uses_field_ids=False
+        )
+
+    assert persistence.get_records(BASE_ID, TABLE_ID) == {}
+    assert any("missing 'id'" in rec.message for rec in caplog.records)

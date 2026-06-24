@@ -42,6 +42,42 @@ def apply_create(
         )
 
 
+def apply_update(
+    persistence: AirtablePersistence,
+    base_id: str,
+    table_id: str,
+    body: dict[str, Any],
+    *,
+    response_uses_field_ids: bool,
+    replace: bool = False,
+) -> None:
+    """
+    Apply a successful PATCH or PUT response to the local cache.
+
+    With `replace=False` (default, PATCH semantics) the response fields are
+    merged with the existing cached record. With `replace=True` (PUT
+    semantics) the response fields replace the cached fields entirely.
+    """
+    records = _records_from_body(body)
+    name_to_id = None if response_uses_field_ids else _name_to_id(persistence, base_id, table_id)
+    for record in records:
+        record_id = record.get("id")
+        if not record_id:
+            logger.warning("Skipping update: response record missing 'id'")
+            continue
+        new_fields = _translate_fields(record.get("fields", {}), name_to_id)
+        existing = persistence.get_record(base_id, table_id, record_id)
+        if existing is None or replace:
+            merged_fields = new_fields
+            created_time = record.get("createdTime") or (existing.created_time if existing else "")
+        else:
+            merged_fields = {**existing.fields, **new_fields}
+            created_time = existing.created_time
+        persistence.save_record(
+            base_id, table_id, record_id, fields=merged_fields, created_time=created_time
+        )
+
+
 def _records_from_body(body: dict[str, Any]) -> list[dict[str, Any]]:
     """
     Normalize Airtable's two response shapes to a list of record dicts:
