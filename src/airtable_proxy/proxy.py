@@ -66,6 +66,7 @@ async def proxy_to_airtable(request: Request, path: str) -> Response:
     """
     Forward a request to the Airtable API and return the response.
 
-    Preserved for the existing catch-all proxy callers.
+    Convenience wrapper around `forward` and `response_from_httpx` for
+    callers that do not need to inspect the response body.
     """
     return response_from_httpx(await forward(request, path))
