@@ -78,6 +78,33 @@ def apply_update(
         )
 
 
+def apply_delete(
+    persistence: AirtablePersistence,
+    base_id: str,
+    table_id: str,
+    body: dict[str, Any],
+) -> None:
+    """
+    Apply a successful DELETE response to the local cache.
+
+    Handles both single-record (`{"id": ..., "deleted": true}`) and
+    multi-record (`{"records": [{"id": ..., "deleted": true}, ...]}`)
+    response shapes. A request to delete a record we don't have cached
+    is a no-op.
+    """
+    if isinstance(body.get("records"), list):
+        ids = [r.get("id") for r in body["records"] if isinstance(r, dict)]
+    elif "id" in body:
+        ids = [body.get("id")]
+    else:
+        ids = []
+    for record_id in ids:
+        if not record_id:
+            logger.warning("Skipping delete: response record missing 'id'")
+            continue
+        persistence.delete_record(base_id, table_id, record_id)
+
+
 def _records_from_body(body: dict[str, Any]) -> list[dict[str, Any]]:
     """
     Normalize Airtable's two response shapes to a list of record dicts:

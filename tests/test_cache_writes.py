@@ -260,3 +260,91 @@ def test_apply_update_with_missing_id_logs_and_skips_record(tmp_path, caplog):
 
     assert persistence.get_records(BASE_ID, TABLE_ID) == {}
     assert any("missing 'id'" in rec.message for rec in caplog.records)
+
+
+def test_apply_delete_single_record_shape(tmp_path):
+    persistence = make_persistence(tmp_path)
+    persistence.save_record(
+        BASE_ID,
+        TABLE_ID,
+        REC_1,
+        {FLD_NAME: "Alice"},
+        "2024-01-01T00:00:00.000Z",
+    )
+
+    cache_writes.apply_delete(persistence, BASE_ID, TABLE_ID, {"id": REC_1, "deleted": True})
+
+    assert persistence.get_record(BASE_ID, TABLE_ID, REC_1) is None
+
+
+def test_apply_delete_multi_record_shape(tmp_path):
+    persistence = make_persistence(tmp_path)
+    persistence.save_record(
+        BASE_ID,
+        TABLE_ID,
+        REC_1,
+        {FLD_NAME: "Alice"},
+        "2024-01-01T00:00:00.000Z",
+    )
+    persistence.save_record(
+        BASE_ID,
+        TABLE_ID,
+        REC_2,
+        {FLD_NAME: "Bob"},
+        "2024-01-02T00:00:00.000Z",
+    )
+
+    cache_writes.apply_delete(
+        persistence,
+        BASE_ID,
+        TABLE_ID,
+        {"records": [{"id": REC_1, "deleted": True}, {"id": REC_2, "deleted": True}]},
+    )
+
+    assert persistence.get_record(BASE_ID, TABLE_ID, REC_1) is None
+    assert persistence.get_record(BASE_ID, TABLE_ID, REC_2) is None
+
+
+def test_apply_delete_missing_record_is_a_noop(tmp_path):
+    persistence = make_persistence(tmp_path)
+
+    cache_writes.apply_delete(persistence, BASE_ID, TABLE_ID, {"id": REC_1, "deleted": True})
+
+    assert persistence.get_record(BASE_ID, TABLE_ID, REC_1) is None
+
+
+def test_apply_delete_with_unrecognized_body_shape_does_nothing(tmp_path):
+    persistence = make_persistence(tmp_path)
+    persistence.save_record(
+        BASE_ID,
+        TABLE_ID,
+        REC_1,
+        {FLD_NAME: "Alice"},
+        "2024-01-01T00:00:00.000Z",
+    )
+
+    cache_writes.apply_delete(persistence, BASE_ID, TABLE_ID, {"unrecognized": "shape"})
+
+    assert persistence.get_record(BASE_ID, TABLE_ID, REC_1) is not None
+
+
+def test_apply_delete_with_missing_id_logs_and_skips_record(tmp_path, caplog):
+    persistence = make_persistence(tmp_path)
+    persistence.save_record(
+        BASE_ID,
+        TABLE_ID,
+        REC_1,
+        {FLD_NAME: "Alice"},
+        "2024-01-01T00:00:00.000Z",
+    )
+
+    with caplog.at_level("WARNING", logger="airtable_proxy.cache_writes"):
+        cache_writes.apply_delete(
+            persistence,
+            BASE_ID,
+            TABLE_ID,
+            {"records": [{"deleted": True}]},
+        )
+
+    assert persistence.get_record(BASE_ID, TABLE_ID, REC_1) is not None
+    assert any("missing 'id'" in rec.message for rec in caplog.records)
