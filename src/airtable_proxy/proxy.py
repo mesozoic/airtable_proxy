@@ -53,11 +53,18 @@ def response_from_httpx(response: httpx.Response) -> Response:
     """
     Convert an httpx response into a FastAPI/Starlette Response that
     preserves status code, headers, and content type.
+
+    ``httpx`` automatically decompresses the response body, so we must drop
+    ``Content-Encoding`` and ``Transfer-Encoding`` from the forwarded headers.
+    Sending those headers with an already-decoded body would cause downstream
+    clients to attempt a second decompression pass and fail.
     """
+    _STRIP = {"content-encoding", "transfer-encoding"}
+    headers = {k: v for k, v in response.headers.items() if k.lower() not in _STRIP}
     return Response(
         content=response.content,
         status_code=response.status_code,
-        headers=dict(response.headers),
+        headers=headers,
         media_type=response.headers.get("Content-Type"),
     )
 
