@@ -92,13 +92,8 @@ def apply_delete(
     response shapes. A request to delete a record we don't have cached
     is a no-op.
     """
-    if isinstance(body.get("records"), list):
-        ids = [r.get("id") for r in body["records"] if isinstance(r, dict)]
-    elif "id" in body:
-        ids = [body.get("id")]
-    else:
-        ids = []
-    for record_id in ids:
+    for record in _records_from_body(body):
+        record_id = record.get("id")
         if not record_id:
             logger.warning("Skipping delete: response record missing 'id'")
             continue
