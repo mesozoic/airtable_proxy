@@ -20,20 +20,18 @@ class ProxyRequest(Exception):
     pass
 
 
-async def proxy_to_airtable(request: Request, path: str) -> Response:
+async def forward(request: Request, path: str) -> httpx.Response:
     """
-    Forward a request to the Airtable API and return the response.
+    Forward an incoming request to the Airtable API and return the raw
+    httpx response.
 
-    Args:
-        request: The incoming FastAPI request
-        path: The path to forward (e.g., "v0/appXXX/TableName")
-
-    Returns:
-        A FastAPI Response containing the Airtable API response
+    Callers that need to read the response body before returning it (for
+    example, to update the local cache) should use this helper and then
+    pass the result to `response_from_httpx`.
     """
     url = f"{AIRTABLE_API_BASE}/{path}"
 
-    headers = {}
+    headers: dict[str, str] = {}
     if auth := request.headers.get("Authorization"):
         headers["Authorization"] = auth
     if content_type := request.headers.get("Content-Type"):
@@ -42,7 +40,7 @@ async def proxy_to_airtable(request: Request, path: str) -> Response:
     body = await request.body()
 
     async with httpx.AsyncClient() as client:
-        response = await client.request(
+        return await client.request(
             method=request.method,
             url=url,
             params=request.query_params,
@@ -50,9 +48,24 @@ async def proxy_to_airtable(request: Request, path: str) -> Response:
             content=body if body else None,
         )
 
+
+def response_from_httpx(response: httpx.Response) -> Response:
+    """
+    Convert an httpx response into a FastAPI/Starlette Response that
+    preserves status code, headers, and content type.
+    """
     return Response(
         content=response.content,
         status_code=response.status_code,
         headers=dict(response.headers),
         media_type=response.headers.get("Content-Type"),
     )
+
+
+async def proxy_to_airtable(request: Request, path: str) -> Response:
+    """
+    Forward a request to the Airtable API and return the response.
+
+    Preserved for the existing catch-all proxy callers.
+    """
+    return response_from_httpx(await forward(request, path))
