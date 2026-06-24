@@ -57,10 +57,19 @@ def _records_from_body(body: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _name_to_id(persistence: AirtablePersistence, base_id: str, table_id: str) -> dict[str, str]:
+    """
+    Build a lookup map from field name → field ID for the given table.
+    """
     return {info.field_name: fid for fid, info in persistence.get_fields(base_id, table_id).items()}
 
 
 def _translate_fields(fields: dict[str, Any], name_to_id: dict[str, str] | None) -> dict[str, Any]:
+    """
+    Translate field keys in *fields* from names to IDs using *name_to_id*.
+
+    When *name_to_id* is ``None`` the response already uses field IDs, so the
+    fields dict is returned as-is. Unknown field names are logged and dropped.
+    """
     if name_to_id is None:
         return dict(fields)
     out: dict[str, Any] = {}

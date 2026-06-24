@@ -113,9 +113,13 @@ def test_apply_create_with_missing_id_logs_and_skips_record(tmp_path, caplog):
     persistence = make_persistence(tmp_path)
     body = {"records": [{"createdTime": "x", "fields": {"Name": "Alice"}}]}
 
-    cache_writes.apply_create(persistence, BASE_ID, TABLE_ID, body, response_uses_field_ids=False)
+    with caplog.at_level("WARNING", logger="airtable_proxy.cache_writes"):
+        cache_writes.apply_create(
+            persistence, BASE_ID, TABLE_ID, body, response_uses_field_ids=False
+        )
 
     assert persistence.get_records(BASE_ID, TABLE_ID) == {}
+    assert any("missing 'id'" in rec.message for rec in caplog.records)
 
 
 def test_apply_create_with_unrecognized_body_shape_does_nothing(tmp_path):
