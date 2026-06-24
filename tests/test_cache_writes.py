@@ -195,6 +195,28 @@ def test_apply_update_missing_record_is_treated_as_create(tmp_path):
     assert stored.fields == {FLD_NAME: "Alice"}
 
 
+def test_apply_update_missing_record_with_replace_is_treated_as_create(tmp_path):
+    persistence = make_persistence(tmp_path)
+    body = {
+        "id": REC_1,
+        "createdTime": "2024-01-01T00:00:00.000Z",
+        "fields": {"Name": "Alice"},
+    }
+
+    cache_writes.apply_update(
+        persistence,
+        BASE_ID,
+        TABLE_ID,
+        body,
+        response_uses_field_ids=False,
+        replace=True,
+    )
+
+    stored = persistence.get_record(BASE_ID, TABLE_ID, REC_1)
+    assert stored.fields == {FLD_NAME: "Alice"}
+    assert stored.created_time == "2024-01-01T00:00:00.000Z"
+
+
 def test_apply_update_multi_record_response_with_upsert_shape(tmp_path):
     persistence = make_persistence(tmp_path)
     persistence.save_record(
