@@ -73,7 +73,7 @@
 
 ## 0.2
 
-- [ ] Update the cache after POST/PUT/PATCH/DELETE operations
+- [x] Update the cache after POST/PUT/PATCH/DELETE operations
 
 ## 0.3
 

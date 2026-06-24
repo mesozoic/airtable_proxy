@@ -74,6 +74,23 @@ def test_proxy_post_request_with_body(httpx_mock, tmp_path):
     assert b"New Record" in request.content
 
 
+def test_proxy_delete_request(httpx_mock, tmp_path):
+    """Test that DELETE requests to /v0/* are proxied via the catch-all route."""
+    application = app.create_app(config=make_config(tmp_path))
+
+    httpx_mock.add_response(json={"deleted": True, "id": "rec123"})
+
+    with TestClient(application) as client:
+        response = client.delete(
+            "/v0/appXXX/TableName/rec123",
+            headers={"Authorization": "Bearer patXXX"},
+        )
+
+    assert response.status_code == 200
+    request = httpx_mock.get_request()
+    assert request.method == "DELETE"
+
+
 def test_proxy_passes_query_params(httpx_mock, tmp_path):
     """Test that query parameters are forwarded to Airtable."""
     application = app.create_app(config=make_config(tmp_path))
@@ -102,6 +119,23 @@ def test_create_app_loads_config_from_env(tmp_path):
     with TestClient(application) as client:
         response = client.get("/health")
         assert response.status_code == 200
+
+
+def test_proxy_meta_request_uses_catchall(httpx_mock, tmp_path):
+    """Test that paths with depth != 2 or 3 go through the catch-all (proxy_v0)."""
+    application = app.create_app(config=make_config(tmp_path))
+
+    httpx_mock.add_response(json={"bases": []})
+
+    with TestClient(application) as client:
+        response = client.get(
+            "/v0/meta/bases/tblXXX/fields",
+            headers={"Authorization": "Bearer patXXX"},
+        )
+
+    assert response.status_code == 200
+    request = httpx_mock.get_request()
+    assert str(request.url).endswith("/v0/meta/bases/tblXXX/fields")
 
 
 @pytest.mark.parametrize(
