@@ -617,6 +617,40 @@ def test_base_poller_initialize_existing_webhook_polls(airtable_api, base_poller
     assert not any(r.method == "POST" and "webhooks" in r.path for r in airtable_api.request_history)
 
 
+def test_base_poller_initialize_recreates_culled_webhook(airtable_api, base_poller):
+    """
+    When the stored webhook ID no longer exists at Airtable (culled after
+    7 days without polling), initialize() recreates the webhook, resets the
+    cursor, and refreshes the cache instead of crashing.
+    """
+    base_poller.persistence.save_webhook("appB", webhook_id="whGone", cursor=5)
+    callback = "https://example.com/webhooks/appB"
+
+    airtable_api.mock_whoami()
+    # GET /webhooks never contains whGone -> base.webhook("whGone") raises
+    # KeyError; find_or_create then creates achNew and resolves it.
+    airtable_api.mock_list_webhooks_sequence(
+        "appB",
+        [],  # poll(): resolve whGone -> KeyError
+        [],  # find_or_create: no match -> create
+        [airtable_api.webhook_json("achNew", callback)],  # resolve achNew
+    )
+    airtable_api.mock_create_webhook("appB", "achNew")
+    airtable_api.mock_schema("appB", [airtable_api.table_json("tbl1", "Table One")])
+    airtable_api.add_records(
+        "appB",
+        "tbl1",
+        [{"id": "rec1", "fields": {"fldA": "v"}, "createdTime": "2024-01-01T00:00:00.000Z"}],
+    )
+
+    base_poller.initialize(callback)
+
+    info = base_poller.persistence.get_webhook("appB")
+    assert info.webhook_id == "achNew"
+    assert info.cursor == 0
+    assert base_poller.persistence.get_record("appB", "tbl1", "rec1") is not None
+
+
 # -- run_polling_loop tests --
 
 

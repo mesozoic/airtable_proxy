@@ -217,6 +217,19 @@ class BasePoller:
             self.persistence.save_webhook(self.base_id, webhook_info.webhook_id, payload.cursor)
             logger.info(f"Processed payload {payload.cursor} for base {self.base_id}")
 
+    def _resolve_webhook(self, base: Base, webhook_id: str) -> Webhook | None:
+        """Return the live webhook handle, or None if Airtable no longer has it."""
+        try:
+            return base.webhook(webhook_id)
+        except KeyError:
+            return None
+
+    def _create_webhook_and_refresh(self, base: Base, callback_url: str) -> None:
+        """Create (or adopt) a webhook, reset the cursor, and refresh the cache."""
+        webhook = find_or_create_webhook(base, callback_url)
+        self.persistence.save_webhook(self.base_id, webhook_id=webhook.id, cursor=0)
+        refresh_tables(base, self.base_id, self.persistence)
+
     def initialize(self, callback_url: str) -> None:
         """Initialize the webhook for this base, polling if one already exists."""
         api = Api(self.base_config.api_key)
@@ -225,15 +238,22 @@ class BasePoller:
         base = api.base(self.base_id)
         webhook_info = self.persistence.get_webhook(self.base_id)
 
-        if webhook_info:
-            # Existing webhook - poll for any missed payloads
+        if not webhook_info:
+            self._create_webhook_and_refresh(base, callback_url)
+            return
+
+        # Airtable culls webhooks that go unpolled for 7 days, so a stored ID
+        # may no longer resolve. Recreate it from scratch when that happens.
+        self._webhook = self._resolve_webhook(base, webhook_info.webhook_id)
+        if self._webhook is None:
+            logger.warning(
+                f"Stored webhook {webhook_info.webhook_id} no longer exists "
+                f"for base {self.base_id}; recreating"
+            )
+            self._create_webhook_and_refresh(base, callback_url)
+        else:
             logger.info(f"Found existing webhook {webhook_info.webhook_id} for base {self.base_id}")
             self.poll()
-        else:
-            # Find or create webhook
-            webhook = find_or_create_webhook(base, callback_url)
-            self.persistence.save_webhook(self.base_id, webhook_id=webhook.id, cursor=0)
-            refresh_tables(base, self.base_id, self.persistence)
 
 
 def initialize(config: dict[str, Any] | Config) -> None:

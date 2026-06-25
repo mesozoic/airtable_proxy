@@ -77,7 +77,7 @@
 
 ## 0.3
 
-- [ ] Handle edge case when webhook has been deleted
+- [x] Handle edge case when webhook has been deleted
 - [ ] Handle edge case when `changed_records_by_id` references a record the cache doesn't have
     - Currently raises `RuntimeError` and stalls the poller
     - Triggers: cache wipe + replay, base added mid-history, dropped webhook payload.
