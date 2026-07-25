@@ -318,6 +318,84 @@ def test_refresh_tables_saves_fields(airtable_api, storage):
     )
 
 
+# -- refresh_table tests --
+
+
+def test_refresh_table_replaces_records(airtable_api, storage):
+    """refresh_table overwrites the cached table, deleting records Airtable no longer has."""
+    persist = AirtablePersistence(storage)
+    persist.save_table("appBase1", "tbl1", "Old Name")
+    persist.save_record(
+        "appBase1",
+        "tbl1",
+        "recOld",
+        fields={"fldA": "stale"},
+        created_time="2023-12-31T00:00:00.000Z",
+    )
+
+    airtable_api.mock_schema(
+        "appBase1",
+        [
+            airtable_api.table_json(
+                "tbl1",
+                "Table One",
+                fields=[airtable_api.field_json("fldA", "Name", "singleLineText")],
+            ),
+        ],
+    )
+    airtable_api.add_records(
+        "appBase1",
+        "tbl1",
+        [
+            {
+                "id": "rec1",
+                "fields": {"fldA": "value1"},
+                "createdTime": "2024-01-01T00:00:00.000Z",
+            },
+        ],
+    )
+
+    api = Api(API_KEY)
+    base = api.base("appBase1")
+
+    poller.refresh_table(base, "appBase1", "tbl1", persist)
+
+    assert persist.get_record("appBase1", "tbl1", "recOld") is None
+    assert persist.get_record("appBase1", "tbl1", "rec1") == RecordInfo(
+        fields={"fldA": "value1"},
+        created_time="2024-01-01T00:00:00.000Z",
+    )
+    assert persist.get_table("appBase1", "tbl1") == TableInfo(table_name="Table One")
+    assert persist.get_field("appBase1", "tbl1", "fldA") == FieldInfo(
+        field_name="Name", field_type="singleLineText"
+    )
+
+
+def test_refresh_table_skips_table_missing_from_schema(airtable_api, storage):
+    """refresh_table leaves the cache untouched if Airtable's schema lacks the table."""
+    persist = AirtablePersistence(storage)
+    persist.save_table("appBase1", "tbl1", "Table One")
+    persist.save_record(
+        "appBase1",
+        "tbl1",
+        "rec1",
+        fields={"fldA": "value1"},
+        created_time="2024-01-01T00:00:00.000Z",
+    )
+
+    airtable_api.mock_schema("appBase1", [airtable_api.table_json("tbl2", "Other")])
+
+    api = Api(API_KEY)
+    base = api.base("appBase1")
+
+    poller.refresh_table(base, "appBase1", "tbl1", persist)
+
+    assert persist.get_record("appBase1", "tbl1", "rec1") == RecordInfo(
+        fields={"fldA": "value1"},
+        created_time="2024-01-01T00:00:00.000Z",
+    )
+
+
 # -- process_payload tests --
 
 
@@ -489,20 +567,28 @@ def test_process_payload_changed_records(storage):
             }
         }
     )
-    poller.process_payload(payload, "appB", persist)
+    dirty = poller.process_payload(payload, "appB", persist)
 
+    assert dirty == set()
     rec = persist.get_record("appB", "tbl1", "rec1")
     assert rec.fields["fld1"] == "new"
     assert rec.created_time == "t"
 
 
-def test_process_payload_changed_record_missing_raises(storage):
+def test_process_payload_changed_record_missing_marks_table_dirty(storage):
+    """A change for an uncached record marks the table dirty instead of raising."""
     persist = AirtablePersistence(storage)
+    persist.save_record("appB", "tbl1", "rec1", fields={"fld1": "old"}, created_time="t")
 
     payload = _make_payload(
         changedTablesById={
             "tbl1": {
                 "changedRecordsById": {
+                    "rec1": {
+                        "current": {"cellValuesByFieldId": {"fld1": "new"}},
+                        "previous": {"cellValuesByFieldId": {"fld1": "old"}},
+                        "unchanged": {"cellValuesByFieldId": {}},
+                    },
                     "recGhost": {
                         "current": {"cellValuesByFieldId": {"fld1": "x"}},
                         "previous": {"cellValuesByFieldId": {}},
@@ -512,8 +598,11 @@ def test_process_payload_changed_record_missing_raises(storage):
             }
         }
     )
-    with pytest.raises(RuntimeError, match="non-existent record"):
-        poller.process_payload(payload, "appB", persist)
+    dirty = poller.process_payload(payload, "appB", persist)
+
+    assert dirty == {"tbl1"}
+    assert persist.get_record("appB", "tbl1", "recGhost") is None
+    assert persist.get_record("appB", "tbl1", "rec1").fields["fld1"] == "new"
 
 
 def test_process_payload_destroyed_records(storage):
@@ -585,6 +674,112 @@ def test_base_poller_poll_processes_payloads(airtable_api, base_poller):
 
     assert base_poller.persistence.get_record("appB", "tbl1", "rec1").fields["f"] == "new"
     assert base_poller.persistence.get_webhook("appB").cursor == 6
+
+
+def test_base_poller_poll_refreshes_dirty_tables(airtable_api, base_poller):
+    """
+    A payload referencing an uncached record doesn't stall the poller: the
+    cursor advances past it, and the table is refreshed from the API after
+    the payload drain (replacing stale cached records).
+    """
+    base_poller.persistence.save_webhook("appB", webhook_id="whX", cursor=5)
+    base_poller.persistence.save_table("appB", "tbl1", "Table")
+    base_poller.persistence.save_record(
+        "appB", "tbl1", "recStale", fields={"f": "stale"}, created_time="t"
+    )
+
+    airtable_api.mock_list_webhooks("appB", [airtable_api.webhook_json("whX")])
+    airtable_api.mock_webhook_payloads(
+        "appB",
+        "whX",
+        [
+            {
+                "timestamp": "2024-01-01T00:00:00.000Z",
+                "baseTransactionNumber": 6,
+                "payloadFormat": "v0",
+                "changedTablesById": {
+                    "tbl1": {
+                        "changedRecordsById": {
+                            "recGhost": {
+                                "current": {"cellValuesByFieldId": {"f": "new"}},
+                                "previous": {"cellValuesByFieldId": {}},
+                                "unchanged": {"cellValuesByFieldId": {}},
+                            },
+                        },
+                    },
+                },
+            }
+        ],
+        cursor=6,
+    )
+    airtable_api.mock_schema("appB", [airtable_api.table_json("tbl1", "Table")])
+    airtable_api.add_records(
+        "appB",
+        "tbl1",
+        [
+            {
+                "id": "recGhost",
+                "fields": {"f": "new"},
+                "createdTime": "2024-01-01T00:00:00.000Z",
+            },
+        ],
+    )
+
+    base_poller.poll()
+
+    assert base_poller.persistence.get_webhook("appB").cursor == 6
+    assert base_poller.persistence.get_record("appB", "tbl1", "recGhost") == RecordInfo(
+        fields={"f": "new"},
+        created_time="2024-01-01T00:00:00.000Z",
+    )
+    assert base_poller.persistence.get_record("appB", "tbl1", "recStale") is None
+
+
+def test_base_poller_poll_skips_refresh_of_destroyed_dirty_table(airtable_api, base_poller):
+    """
+    A table marked dirty and then destroyed by a later payload in the same
+    drain is not resurrected by the post-drain refresh.
+    """
+    base_poller.persistence.save_webhook("appB", webhook_id="whX", cursor=5)
+    base_poller.persistence.save_table("appB", "tbl1", "Table")
+
+    airtable_api.mock_list_webhooks("appB", [airtable_api.webhook_json("whX")])
+    airtable_api.mock_webhook_payloads(
+        "appB",
+        "whX",
+        [
+            {
+                "timestamp": "2024-01-01T00:00:00.000Z",
+                "baseTransactionNumber": 6,
+                "payloadFormat": "v0",
+                "changedTablesById": {
+                    "tbl1": {
+                        "changedRecordsById": {
+                            "recGhost": {
+                                "current": {"cellValuesByFieldId": {"f": "x"}},
+                                "previous": {"cellValuesByFieldId": {}},
+                                "unchanged": {"cellValuesByFieldId": {}},
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                "timestamp": "2024-01-01T00:00:01.000Z",
+                "baseTransactionNumber": 7,
+                "payloadFormat": "v0",
+                "destroyedTableIds": ["tbl1"],
+            },
+        ],
+        cursor=7,
+    )
+    airtable_api.mock_schema("appB", [])
+
+    base_poller.poll()
+
+    assert base_poller.persistence.get_webhook("appB").cursor == 7
+    assert base_poller.persistence.get_table("appB", "tbl1") is None
+    assert base_poller.persistence.get_record("appB", "tbl1", "recGhost") is None
 
 
 def test_base_poller_webhook_is_cached(airtable_api, base_poller):

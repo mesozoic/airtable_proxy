@@ -69,8 +69,56 @@ def refresh_tables(base: Base, base_id: str, persistence: AirtablePersistence) -
             )
 
 
-def process_payload(payload: WebhookPayload, base_id: str, persistence: AirtablePersistence) -> None:
-    """Process a single webhook payload and update local storage."""
+def refresh_table(base: Base, base_id: str, table_id: str, persistence: AirtablePersistence) -> None:
+    """
+    Fetch one table's schema and records from Airtable, replacing the cached
+    copy — including deleting cached records Airtable no longer has.
+
+    Skips silently if the table is missing from Airtable's schema; deleting
+    the cached table is the destroyed-table payload's job.
+    """
+    schema = base.schema()
+    table_info = next((t for t in schema.tables if t.id == table_id), None)
+    if table_info is None:
+        logger.warning(f"Table {table_id} missing from schema for base {base_id}; skipping refresh")
+        return
+
+    persistence.save_table(base_id, table_id, table_info.name)
+    for field in table_info.fields:
+        persistence.save_field(
+            base_id,
+            table_id,
+            field.id,
+            field_name=field.name,
+            field_type=field.type,
+        )
+
+    stale_record_ids = set(persistence.get_records(base_id, table_id))
+    table = base.table(table_id)
+    for record in table.all(use_field_ids=True):
+        persistence.save_record(
+            base_id,
+            table_id,
+            record["id"],
+            fields=record["fields"],
+            created_time=record["createdTime"],
+        )
+        stale_record_ids.discard(record["id"])
+    for record_id in stale_record_ids:
+        persistence.delete_record(base_id, table_id, record_id)
+
+
+def process_payload(
+    payload: WebhookPayload, base_id: str, persistence: AirtablePersistence
+) -> set[str]:
+    """
+    Process a single webhook payload and update local storage.
+
+    Returns the IDs of tables that need a full refresh because the payload
+    referenced a record the cache doesn't have.
+    """
+    dirty_table_ids: set[str] = set()
+
     # Handle created tables
     for table_id, table_created in payload.created_tables_by_id.items():
         table_name = table_created.metadata.name if table_created.metadata else table_id
@@ -153,9 +201,14 @@ def process_payload(payload: WebhookPayload, base_id: str, persistence: Airtable
         for record_id, record_changed in table_changed.changed_records_by_id.items():
             existing = persistence.get_record(base_id, table_id, record_id)
             if not existing:
-                raise RuntimeError(
-                    f"Received change for non-existent record {record_id} in table {table_id}"
+                # Change payloads are deltas; without the cached record we
+                # can't reconstruct full state, so refresh the whole table.
+                logger.warning(
+                    f"Received change for uncached record {record_id} in "
+                    f"table {table_id}; marking table for refresh"
                 )
+                dirty_table_ids.add(table_id)
+                continue
             logger.debug(f"Updated record {record_id} in table {table_id}")
             new_fields = {
                 **existing.fields,
@@ -182,6 +235,9 @@ def process_payload(payload: WebhookPayload, base_id: str, persistence: Airtable
     for table_id in payload.destroyed_table_ids:
         logger.debug(f"Deleted table {table_id} from base {base_id}")
         persistence.delete_table(base_id, table_id)
+        dirty_table_ids.discard(table_id)
+
+    return dirty_table_ids
 
 
 class BasePoller:
@@ -210,12 +266,21 @@ class BasePoller:
         # Start from cursor + 1 (cursor is last processed, we want next)
         cursor = webhook_info.cursor + 1 if webhook_info.cursor > 0 else 1
 
+        dirty_table_ids: set[str] = set()
         for payload in self._webhook.payloads(cursor=cursor):
-            process_payload(payload, self.base_id, self.persistence)
+            dirty_table_ids |= process_payload(payload, self.base_id, self.persistence)
             # cursor is always set by pyairtable when iterating payloads
             assert payload.cursor is not None
             self.persistence.save_webhook(self.base_id, webhook_info.webhook_id, payload.cursor)
             logger.info(f"Processed payload {payload.cursor} for base {self.base_id}")
+
+        # Refresh dirty tables only after draining all payloads, so the API
+        # snapshot and the saved cursor describe the same point in time.
+        if dirty_table_ids:
+            base = Api(self.base_config.api_key).base(self.base_id)
+            for table_id in sorted(dirty_table_ids):
+                logger.info(f"Refreshing dirty table {table_id} in base {self.base_id}")
+                refresh_table(base, self.base_id, table_id, self.persistence)
 
     def _resolve_webhook(self, base: Base, webhook_id: str) -> Webhook | None:
         """Return the live webhook handle, or None if Airtable no longer has it."""
