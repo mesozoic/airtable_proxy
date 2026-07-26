@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "airtable_proxy"
-version = "0.1.0"
+version = "0.3.0"
 description = ""
 authors = ["Alex Levy <mesozoic@users.noreply.github.com>"]
 license = "MIT"
