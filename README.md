@@ -21,7 +21,7 @@ flowchart LR
 
 ## Requirements
 
-- Python 3.13 or newer
+- Python 3.10 or newer
 - An Airtable account with at least one base
 - A hostname **you control**. It does not need to resolve yet, but Airtable will eventually POST webhook payloads to that URL — anyone who controls the domain controls your data.
 

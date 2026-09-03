@@ -1,7 +1,9 @@
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any, Iterator, Self
+from typing import Any, Iterator
+
+from typing_extensions import Self
 
 
 class Storage:
