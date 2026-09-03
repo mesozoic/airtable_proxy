@@ -111,6 +111,38 @@ def test_delete_field(persist):
     assert persist.get_field("appBase1", "tbl1", "fld1") is None
 
 
+# Refresh marker tests
+
+
+def test_is_refreshing_false_when_unmarked(persist):
+    assert persist.is_refreshing("appBase1") is False
+    assert persist.is_refreshing("appBase1", "tbl1") is False
+
+
+def test_base_refresh_marker_roundtrip(persist):
+    persist.mark_refresh_started("appBase1")
+    assert persist.is_refreshing("appBase1") is True
+
+    persist.mark_refresh_complete("appBase1")
+    assert persist.is_refreshing("appBase1") is False
+
+
+def test_table_refresh_marker_roundtrip(persist):
+    persist.mark_refresh_started("appBase1", "tbl1")
+    assert persist.is_refreshing("appBase1", "tbl1") is True
+
+    persist.mark_refresh_complete("appBase1", "tbl1")
+    assert persist.is_refreshing("appBase1", "tbl1") is False
+
+
+def test_refresh_markers_are_scoped(persist):
+    persist.mark_refresh_started("appBase1", "tbl1")
+
+    assert persist.is_refreshing("appBase1") is False
+    assert persist.is_refreshing("appBase1", "tbl2") is False
+    assert persist.is_refreshing("appBase2", "tbl1") is False
+
+
 # Auth tests
 
 

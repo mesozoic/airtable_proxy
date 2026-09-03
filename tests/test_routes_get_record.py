@@ -166,6 +166,43 @@ def test_proxy_when_record_not_in_local_storage(httpx_mock, client_with_data):
     assert len(httpx_mock.get_requests()) == 1
 
 
+def test_proxy_when_base_refresh_in_progress(httpx_mock, client_with_data):
+    """Proxy while the base's initial refresh is incomplete."""
+    httpx_mock.add_response(json={"id": REC_1, "fields": {}, "createdTime": "x"})
+
+    client, persistence = client_with_data
+    persistence.mark_refresh_started(BASE_ID)
+
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}/{REC_1}", headers=AUTH_HEADERS)
+
+    assert response.status_code == 200
+    assert len(httpx_mock.get_requests()) == 1
+
+
+def test_proxy_when_table_refresh_in_progress(httpx_mock, client_with_data):
+    """Proxy while this specific table is being refreshed."""
+    httpx_mock.add_response(json={"id": REC_1, "fields": {}, "createdTime": "x"})
+
+    client, persistence = client_with_data
+    persistence.mark_refresh_started(BASE_ID, TABLE_ID)
+
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}/{REC_1}", headers=AUTH_HEADERS)
+
+    assert response.status_code == 200
+    assert len(httpx_mock.get_requests()) == 1
+
+
+def test_serves_cache_when_other_table_refreshing(client_with_data):
+    """A refresh marker on a different table doesn't affect this one."""
+    client, persistence = client_with_data
+    persistence.mark_refresh_started(BASE_ID, fake_id("tbl"))
+
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}/{REC_1}", headers=AUTH_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json()["id"] == REC_1
+
+
 # Authentication tests
 
 

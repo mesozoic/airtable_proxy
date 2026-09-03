@@ -371,6 +371,88 @@ def test_refresh_table_replaces_records(airtable_api, storage):
     )
 
 
+def test_refresh_table_marks_table_during_refresh(airtable_api, storage):
+    """
+    refresh_table marks the table as refreshing while records are being
+    written and clears the marker once the stale-record sweep completes.
+    """
+    persist = AirtablePersistence(storage)
+    persist.save_record(
+        "appBase1",
+        "tbl1",
+        "recOld",
+        fields={"fldA": "stale"},
+        created_time="2023-12-31T00:00:00.000Z",
+    )
+
+    airtable_api.mock_schema(
+        "appBase1",
+        [airtable_api.table_json("tbl1", "Table One")],
+    )
+    airtable_api.add_records(
+        "appBase1",
+        "tbl1",
+        [
+            {
+                "id": "rec1",
+                "fields": {"fldA": "value1"},
+                "createdTime": "2024-01-01T00:00:00.000Z",
+            },
+        ],
+    )
+
+    marked_during_write = []
+
+    original_save_record = persist.save_record
+
+    def spy_save_record(base_id, table_id, record_id, **kwargs):
+        marked_during_write.append(persist.is_refreshing(base_id, table_id))
+        return original_save_record(base_id, table_id, record_id, **kwargs)
+
+    api = Api(API_KEY)
+    base = api.base("appBase1")
+
+    with patch.object(persist, "save_record", side_effect=spy_save_record):
+        poller.refresh_table(base, "appBase1", "tbl1", persist)
+
+    assert marked_during_write == [True]
+    assert persist.is_refreshing("appBase1", "tbl1") is False
+
+
+def test_refresh_table_leaves_marker_set_when_refresh_fails(airtable_api, storage):
+    """
+    If refresh_table dies while writing records, the table stays marked as
+    refreshing so readers proxy instead of trusting the half-written cache.
+    """
+    persist = AirtablePersistence(storage)
+    persist.save_table("appBase1", "tbl1", "Table One")
+
+    airtable_api.mock_schema(
+        "appBase1",
+        [airtable_api.table_json("tbl1", "Table One")],
+    )
+    airtable_api.add_records(
+        "appBase1",
+        "tbl1",
+        [
+            {
+                "id": "rec1",
+                "fields": {"fldA": "value1"},
+                "createdTime": "2024-01-01T00:00:00.000Z",
+            },
+        ],
+    )
+
+    api = Api(API_KEY)
+    base = api.base("appBase1")
+
+    with patch.object(persist, "save_record", side_effect=RuntimeError("boom")):
+        with pytest.raises(RuntimeError, match="boom"):
+            poller.refresh_table(base, "appBase1", "tbl1", persist)
+
+    assert persist.is_refreshing("appBase1", "tbl1") is True
+
+
 def test_refresh_table_skips_table_missing_from_schema(airtable_api, storage):
     """refresh_table leaves the cache untouched if Airtable's schema lacks the table."""
     persist = AirtablePersistence(storage)
@@ -733,6 +815,70 @@ def test_base_poller_poll_refreshes_dirty_tables(airtable_api, base_poller):
         created_time="2024-01-01T00:00:00.000Z",
     )
     assert base_poller.persistence.get_record("appB", "tbl1", "recStale") is None
+    assert base_poller.persistence.is_refreshing("appB", "tbl1") is False
+
+
+def test_base_poller_poll_leaves_table_marked_when_refresh_fails(airtable_api, base_poller):
+    """
+    If the post-drain refresh of a dirty table raises, the table stays
+    marked as refreshing so readers proxy instead of trusting the
+    half-refreshed cache; the next successful refresh clears the marker.
+
+    The failure is injected into persistence.save_record: the payload drain
+    never calls it (the ghost record is uncached and skipped), so the first
+    call happens inside the real refresh_table, after the marker is set.
+    """
+    base_poller.persistence.save_webhook("appB", webhook_id="whX", cursor=5)
+    base_poller.persistence.save_table("appB", "tbl1", "Table")
+    base_poller.persistence.save_record(
+        "appB", "tbl1", "recStale", fields={"f": "stale"}, created_time="t"
+    )
+
+    airtable_api.mock_list_webhooks("appB", [airtable_api.webhook_json("whX")])
+    airtable_api.mock_webhook_payloads(
+        "appB",
+        "whX",
+        [
+            {
+                "timestamp": "2024-01-01T00:00:00.000Z",
+                "baseTransactionNumber": 6,
+                "payloadFormat": "v0",
+                "changedTablesById": {
+                    "tbl1": {
+                        "changedRecordsById": {
+                            "recGhost": {
+                                "current": {"cellValuesByFieldId": {"f": "new"}},
+                                "previous": {"cellValuesByFieldId": {}},
+                                "unchanged": {"cellValuesByFieldId": {}},
+                            },
+                        },
+                    },
+                },
+            }
+        ],
+        cursor=6,
+    )
+    airtable_api.mock_schema("appB", [airtable_api.table_json("tbl1", "Table")])
+    airtable_api.add_records(
+        "appB",
+        "tbl1",
+        [
+            {
+                "id": "recGhost",
+                "fields": {"f": "new"},
+                "createdTime": "2024-01-01T00:00:00.000Z",
+            },
+        ],
+    )
+
+    with patch.object(
+        base_poller.persistence, "save_record", side_effect=RuntimeError("boom")
+    ):
+        with pytest.raises(RuntimeError, match="boom"):
+            base_poller.poll()
+
+    assert base_poller.persistence.get_webhook("appB").cursor == 6
+    assert base_poller.persistence.is_refreshing("appB", "tbl1") is True
 
 
 def test_base_poller_poll_skips_refresh_of_destroyed_dirty_table(airtable_api, base_poller):
@@ -780,6 +926,86 @@ def test_base_poller_poll_skips_refresh_of_destroyed_dirty_table(airtable_api, b
     assert base_poller.persistence.get_webhook("appB").cursor == 7
     assert base_poller.persistence.get_table("appB", "tbl1") is None
     assert base_poller.persistence.get_record("appB", "tbl1", "recGhost") is None
+
+
+@patch.object(poller, "refresh_tables")
+def test_create_webhook_saves_webhook_after_refresh(
+    mock_refresh_tables, airtable_api, base_poller
+):
+    """
+    The webhook row is saved only after refresh_tables completes, so a crash
+    mid-refresh leaves no webhook info and the next startup re-initializes
+    instead of trusting a half-populated cache. The base is marked as
+    refreshing for the duration of the refresh.
+    """
+    callback = "https://example.com/webhooks/appB"
+
+    airtable_api.mock_list_webhooks_sequence(
+        "appB",
+        [],  # find_or_create: no match -> create
+        [airtable_api.webhook_json("achNew", callback)],  # resolve achNew
+    )
+    airtable_api.mock_create_webhook("appB", "achNew")
+
+    state_during_refresh = None
+
+    def check_refresh(refresh_base, refresh_base_id, refresh_persistence):
+        nonlocal state_during_refresh
+        state_during_refresh = (
+            refresh_persistence.get_webhook(refresh_base_id),
+            refresh_persistence.is_refreshing(refresh_base_id),
+        )
+
+    mock_refresh_tables.side_effect = check_refresh
+
+    base_poller._create_webhook_and_refresh(Api(API_KEY).base("appB"), callback)
+
+    assert state_during_refresh == (None, True)
+    assert base_poller.persistence.get_webhook("appB").webhook_id == "achNew"
+    assert base_poller.persistence.is_refreshing("appB") is False
+
+
+@patch.object(poller, "refresh_tables", side_effect=RuntimeError("boom"))
+def test_failed_initial_refresh_leaves_base_marked_refreshing(
+    mock_refresh_tables, airtable_api, base_poller
+):
+    """
+    If refresh_tables dies partway through, the base stays marked as
+    refreshing and no webhook info is saved, so readers don't trust the
+    partial cache and the next startup re-initializes.
+    """
+    callback = "https://example.com/webhooks/appB"
+
+    airtable_api.mock_list_webhooks_sequence(
+        "appB",
+        [],
+        [airtable_api.webhook_json("achNew", callback)],
+    )
+    airtable_api.mock_create_webhook("appB", "achNew")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        base_poller._create_webhook_and_refresh(Api(API_KEY).base("appB"), callback)
+
+    assert base_poller.persistence.get_webhook("appB") is None
+    assert base_poller.persistence.is_refreshing("appB") is True
+
+
+def test_base_poller_poll_clears_stale_refresh_marker(airtable_api, base_poller):
+    """
+    A base-level refreshing marker left behind by a crashed refresh_tables
+    is cleared on the first successful poll: the saved cursor was only
+    written after the refresh completed, so replaying from it brings the
+    cache up to date.
+    """
+    base_poller.persistence.save_webhook("appB", webhook_id="whX", cursor=5)
+    base_poller.persistence.mark_refresh_started("appB")
+
+    airtable_api.mock_list_webhooks("appB", [airtable_api.webhook_json("whX")])
+    airtable_api.mock_webhook_payloads("appB", "whX", [], cursor=5)
+
+    base_poller.poll()
+
+    assert base_poller.persistence.is_refreshing("appB") is False
 
 
 def test_base_poller_webhook_is_cached(airtable_api, base_poller):
@@ -843,6 +1069,40 @@ def test_base_poller_initialize_recreates_culled_webhook(airtable_api, base_poll
     info = base_poller.persistence.get_webhook("appB")
     assert info.webhook_id == "achNew"
     assert info.cursor == 0
+    assert base_poller.persistence.get_record("appB", "tbl1", "rec1") is not None
+
+
+def test_base_poller_initialize_purges_stale_cache_on_recreate(airtable_api, base_poller):
+    """
+    When initialize() recreates the webhook, the cache is purged before
+    refreshing: records left behind by a crashed earlier refresh (or
+    deleted from the base while we were away) don't linger.
+    """
+    base_poller.persistence.save_webhook("appB", webhook_id="whGone", cursor=5)
+    base_poller.persistence.save_table("appB", "tbl1", "Table One")
+    base_poller.persistence.save_record(
+        "appB", "tbl1", "recPhantom", fields={"fldA": "stale"}, created_time="t"
+    )
+    callback = "https://example.com/webhooks/appB"
+
+    airtable_api.mock_whoami()
+    airtable_api.mock_list_webhooks_sequence(
+        "appB",
+        [],  # poll(): resolve whGone -> KeyError
+        [],  # find_or_create: no match -> create
+        [airtable_api.webhook_json("achNew", callback)],  # resolve achNew
+    )
+    airtable_api.mock_create_webhook("appB", "achNew")
+    airtable_api.mock_schema("appB", [airtable_api.table_json("tbl1", "Table One")])
+    airtable_api.add_records(
+        "appB",
+        "tbl1",
+        [{"id": "rec1", "fields": {"fldA": "v"}, "createdTime": "2024-01-01T00:00:00.000Z"}],
+    )
+
+    base_poller.initialize(callback)
+
+    assert base_poller.persistence.get_record("appB", "tbl1", "recPhantom") is None
     assert base_poller.persistence.get_record("appB", "tbl1", "rec1") is not None
 
 

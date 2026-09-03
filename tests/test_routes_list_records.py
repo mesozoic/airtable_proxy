@@ -238,6 +238,51 @@ def test_proxy_when_table_not_in_local_storage(httpx_mock, test_app):
     assert len(httpx_mock.get_requests()) == 1
 
 
+def test_proxy_when_base_refresh_in_progress(httpx_mock, client_with_data):
+    """
+    Proxy to Airtable while the base's initial refresh is incomplete,
+    even if the table itself looks cached.
+    """
+    httpx_mock.add_response(json={"records": []})
+
+    client, persistence = client_with_data
+    persistence.mark_refresh_started(BASE_ID)
+
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}", headers=AUTH_HEADERS)
+
+    assert response.status_code == 200
+    assert len(httpx_mock.get_requests()) == 1
+
+
+def test_proxy_when_table_refresh_in_progress(httpx_mock, client_with_data):
+    """
+    Proxy to Airtable while this specific table is being refreshed, so a
+    half-refreshed table is never served from the cache.
+    """
+    httpx_mock.add_response(json={"records": []})
+
+    client, persistence = client_with_data
+    persistence.mark_refresh_started(BASE_ID, TABLE_ID)
+
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}", headers=AUTH_HEADERS)
+
+    assert response.status_code == 200
+    assert len(httpx_mock.get_requests()) == 1
+
+
+def test_serves_cache_when_other_table_refreshing(client_with_data):
+    """
+    A refresh marker on a different table doesn't affect this one.
+    """
+    client, persistence = client_with_data
+    persistence.mark_refresh_started(BASE_ID, fake_id("tbl"))
+
+    response = client.get(f"/v0/{BASE_ID}/{TABLE_ID}", headers=AUTH_HEADERS)
+
+    assert response.status_code == 200
+    assert len(response.json()["records"]) == 3
+
+
 # maxRecords tests
 
 
