@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import sys
 
 import click
@@ -34,6 +35,10 @@ def main(config: str | None = None) -> None:
     For finer control, run airtable_proxy.server and airtable_proxy.poller
     as separate processes.
     """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     try:
         config_path = resolve_config_path(config)
     except ConfigNotFoundError as exc:

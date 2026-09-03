@@ -30,19 +30,24 @@ def callback_url(hostname: str, base_id: str) -> str:
 
 def find_or_create_webhook(base: Base, callback_url: str) -> Webhook:
     """Find existing webhook by callback URL, or create a new one."""
+    logger.info(f"Looking for existing webhook with callback URL {callback_url}")
     for webhook in base.webhooks():
         if webhook.notification_url == callback_url:
+            logger.info(f"Found existing webhook {webhook.id}")
             return webhook
 
     # Create new webhook
     spec = {"options": {"filters": {"dataTypes": ["tableData"]}}}
     response = base.add_webhook(callback_url, spec)
+    logger.info(f"Created new webhook {response.id}")
     return base.webhook(response.id)
 
 
 def refresh_tables(base: Base, base_id: str, persistence: AirtablePersistence) -> None:
     """Fetch all tables and records from a base and store them."""
+    logger.info(f"Fetching schema for base {base_id}")
     schema = base.schema()
+    logger.info(f"Refreshing {len(schema.tables)} table(s) for base {base_id}")
     for table_info in schema.tables:
         table_id = table_info.id
         table_name = table_info.name
@@ -59,6 +64,7 @@ def refresh_tables(base: Base, base_id: str, persistence: AirtablePersistence) -
             )
 
         table = base.table(table_id)
+        record_count = 0
         for record in table.all(use_field_ids=True):
             persistence.save_record(
                 base_id,
@@ -67,6 +73,8 @@ def refresh_tables(base: Base, base_id: str, persistence: AirtablePersistence) -
                 fields=record["fields"],
                 created_time=record["createdTime"],
             )
+            record_count += 1
+        logger.info(f"Cached {record_count} record(s) from table {table_id} ({table_name})")
 
 
 def refresh_table(base: Base, base_id: str, table_id: str, persistence: AirtablePersistence) -> None:
@@ -294,11 +302,14 @@ class BasePoller:
         webhook = find_or_create_webhook(base, callback_url)
         self.persistence.save_webhook(self.base_id, webhook_id=webhook.id, cursor=0)
         refresh_tables(base, self.base_id, self.persistence)
+        logger.info(f"Initialization complete for base {self.base_id}")
 
     def initialize(self, callback_url: str) -> None:
         """Initialize the webhook for this base, polling if one already exists."""
+        logger.info(f"Initializing base {self.base_id}")
         api = Api(self.base_config.api_key)
         api.whoami()  # Raises if connection fails
+        logger.info(f"Connected to Airtable for base {self.base_id}")
 
         base = api.base(self.base_id)
         webhook_info = self.persistence.get_webhook(self.base_id)
@@ -330,6 +341,7 @@ def initialize(config: dict[str, Any] | Config) -> None:
     if isinstance(config, dict):
         config = load_config(config)
 
+    logger.info(f"Opening storage at {config.storage.sqlite}")
     config.storage.sqlite.parent.mkdir(parents=True, exist_ok=True)
     with Storage(config.storage.sqlite) as storage:
         persistence = AirtablePersistence(storage)
