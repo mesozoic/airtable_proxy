@@ -143,6 +143,24 @@ def test_refresh_markers_are_scoped(persist):
     assert persist.is_refreshing("appBase2", "tbl1") is False
 
 
+def test_delete_base_removes_table_refresh_markers(persist):
+    """
+    Purging a base sweeps leftover per-table refresh markers, but keeps the
+    base-level marker: delete_base runs *during* a base-level refresh, which
+    owns that marker.
+    """
+    persist.save_table("appBase1", "tbl1", "Table One")
+    persist.mark_refresh_started("appBase1")
+    persist.mark_refresh_started("appBase1", "tbl1")
+    persist.mark_refresh_started("appBase2", "tbl1")
+
+    persist.delete_base("appBase1")
+
+    assert persist.is_refreshing("appBase1") is True
+    assert persist.is_refreshing("appBase1", "tbl1") is False
+    assert persist.is_refreshing("appBase2", "tbl1") is True
+
+
 # Auth tests
 
 

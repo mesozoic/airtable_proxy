@@ -90,6 +90,18 @@ class AirtablePersistence:
             for key in list(self._storage.keys(prefix)):
                 self._storage.delete(key)
 
+    def delete_base(self, base_id: str) -> None:
+        """
+        Delete every cached table (and its fields and records) for a base,
+        along with any leftover refresh markers.
+        """
+        for table_id in list(self.get_tables(base_id)):
+            self.delete_table(base_id, table_id)
+        base_marker = self._refresh_key(base_id)
+        for key in list(self._storage.keys(base_marker)):
+            if key != base_marker:
+                self._storage.delete(key)
+
     def get_tables(self, base_id: str) -> dict[str, TableInfo]:
         prefix = TableInfo.prefix(base_id)
         result = {}
@@ -161,6 +173,26 @@ class AirtablePersistence:
             data = self._storage.get(key)
             result[record_id] = RecordInfo.model_validate(data)
         return result
+
+    # Refresh marker methods
+
+    @staticmethod
+    def _refresh_key(base_id: str, table_id: str | None = None) -> str:
+        # Trailing separator matches TableInfo.prefix etc., so a prefix scan
+        # for one base's markers can't match a base whose ID extends it.
+        key = f"refreshing:{base_id}:"
+        if table_id is not None:
+            key += table_id
+        return key
+
+    def is_refreshing(self, base_id: str, table_id: str | None = None) -> bool:
+        return self._storage.get(self._refresh_key(base_id, table_id)) is not None
+
+    def mark_refresh_started(self, base_id: str, table_id: str | None = None) -> None:
+        self._storage.set(self._refresh_key(base_id, table_id), True)
+
+    def mark_refresh_complete(self, base_id: str, table_id: str | None = None) -> None:
+        self._storage.delete(self._refresh_key(base_id, table_id))
 
     # Auth methods
 

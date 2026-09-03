@@ -51,6 +51,7 @@ def refresh_tables(base: Base, base_id: str, persistence: AirtablePersistence) -
     for table_info in schema.tables:
         table_id = table_info.id
         table_name = table_info.name
+        logger.info(f"Refreshing {base_id=} {table_id=} {table_name=}")
         persistence.save_table(base_id, table_id, table_name)
 
         # Save field metadata
@@ -91,6 +92,11 @@ def refresh_table(base: Base, base_id: str, table_id: str, persistence: Airtable
         logger.warning(f"Table {table_id} missing from schema for base {base_id}; skipping refresh")
         return
 
+    # Mark the table as mid-refresh so readers proxy instead of trusting a
+    # half-written cache. The marker is cleared only once the refresh and
+    # the stale-record sweep complete; if we die in between, it stays set
+    # until a later refresh finishes.
+    persistence.mark_refresh_started(base_id, table_id)
     persistence.save_table(base_id, table_id, table_info.name)
     for field in table_info.fields:
         persistence.save_field(
@@ -114,6 +120,7 @@ def refresh_table(base: Base, base_id: str, table_id: str, persistence: Airtable
         stale_record_ids.discard(record["id"])
     for record_id in stale_record_ids:
         persistence.delete_record(base_id, table_id, record_id)
+    persistence.mark_refresh_complete(base_id, table_id)
 
 
 def process_payload(
@@ -271,6 +278,13 @@ class BasePoller:
             base = api.base(self.base_id)
             self._webhook = base.webhook(webhook_info.webhook_id)
 
+        # A leftover base-level marker means a refresh died after the cursor
+        # was last saved. The cursor was only written once that refresh
+        # completed, so replaying from it brings the cache up to date.
+        if self.persistence.is_refreshing(self.base_id):
+            logger.info(f"Clearing stale refresh marker for base {self.base_id}")
+            self.persistence.mark_refresh_complete(self.base_id)
+
         # Start from cursor + 1 (cursor is last processed, we want next)
         cursor = webhook_info.cursor + 1 if webhook_info.cursor > 0 else 1
 
@@ -280,7 +294,7 @@ class BasePoller:
             # cursor is always set by pyairtable when iterating payloads
             assert payload.cursor is not None
             self.persistence.save_webhook(self.base_id, webhook_info.webhook_id, payload.cursor)
-            logger.info(f"Processed payload {payload.cursor} for base {self.base_id}")
+            logger.debug(f"Processed payload {payload.cursor} for base {self.base_id}")
 
         # Refresh dirty tables only after draining all payloads, so the API
         # snapshot and the saved cursor describe the same point in time.
@@ -298,10 +312,22 @@ class BasePoller:
             return None
 
     def _create_webhook_and_refresh(self, base: Base, callback_url: str) -> None:
-        """Create (or adopt) a webhook, reset the cursor, and refresh the cache."""
+        """
+        Create (or adopt) a webhook, reset the cursor, and refresh the cache.
+
+        The base is marked as refreshing for the duration, and the webhook
+        row is saved only after the refresh completes: if we die partway
+        through, the next startup finds no webhook info and starts over,
+        and readers proxy rather than trust the half-populated cache.
+        """
         webhook = find_or_create_webhook(base, callback_url)
-        self.persistence.save_webhook(self.base_id, webhook_id=webhook.id, cursor=0)
+        self.persistence.mark_refresh_started(self.base_id)
+        # Anything already cached is untrustworthy: it may be partial (an
+        # earlier refresh died) or stale (the webhook was culled).
+        self.persistence.delete_base(self.base_id)
         refresh_tables(base, self.base_id, self.persistence)
+        self.persistence.save_webhook(self.base_id, webhook_id=webhook.id, cursor=0)
+        self.persistence.mark_refresh_complete(self.base_id)
         logger.info(f"Initialization complete for base {self.base_id}")
 
     def initialize(self, callback_url: str) -> None:

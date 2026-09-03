@@ -45,6 +45,8 @@ def add_routes(app: FastAPI) -> None:
         table_id = resolve_table_id(base_id, table_id_or_name, persistence)
         if table_id is None:
             raise ProxyRequest()
+        if persistence.is_refreshing(base_id, table_id):
+            raise ProxyRequest()
 
         await require_auth(request, base_id, persistence)
 

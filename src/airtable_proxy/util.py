@@ -30,8 +30,12 @@ def resolve_table_id(
     """
     Resolve a table ID or name to a table ID.
 
-    Returns None if the table is not found in local storage.
+    Returns None if the table is not found in local storage, or if the
+    base's cache is mid-refresh and therefore untrustworthy.
     """
+    if persistence.is_refreshing(base_id):
+        return None
+
     if table_id_or_name.startswith("tbl"):
         if persistence.get_table(base_id, table_id_or_name) is not None:
             return table_id_or_name
